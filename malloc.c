@@ -107,7 +107,7 @@ void* my_malloc(size_t size){
             if (firstRignt == NULL) firstRignt = toRight;
             calculateSize += toRight->size;
             requiredBlocks++;
-        }
+        }      
         Block* endPrev = toLeft - 1;
         toLeft = (Block*)((uint8_t*)toLeft - (sizeof(Block)*2) - endPrev->size);
         toRight = (Block*)((uint8_t*)toRight + (sizeof(Block)*2) + toRight->size);
@@ -115,8 +115,11 @@ void* my_malloc(size_t size){
 
     if (block == NULL){
         if (calculateSize < size) return NULL;
-        if (firstLeft == NULL) return fragmentAllocation(size, firstRignt, requiredBlocks);
-        return fragmentAllocation(size, firstLeft, requiredBlocks); 
+        if (firstLeft == NULL)
+        {
+            return fragmentAllocation(size, firstRignt, requiredBlocks);
+        }
+        return fragmentAllocation(size, firstLeft, requiredBlocks);  
     }
 
     size_t saveSize = block->size;
