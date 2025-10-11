@@ -80,40 +80,18 @@ void* fragmentAllocation(size_t size, Block* firstBlock, int requiredBlocks){
     
 }
 
-void* my_malloc_fragment(size_t size){
-    size_t x = 0;
-    Block* block = (Block*)MY_HEAP;
-    int requiredBlocks = 0;
-    Block* firstFreeBlock = NULL;
-    size_t calculateSize = 0;
-
-    while (x < SIZE_HEAP && calculateSize < size) {
-        if (block->size > SIZE_HEAP) return NULL;
-
-        if (block->is_free == 1){
-            if (calculateSize < size){
-                calculateSize += block->size;
-                requiredBlocks++;
-            }
-            if (firstFreeBlock == NULL) firstFreeBlock = block;
-        }
-            
-        x += sizeof(Block) + block->size + sizeof(Block);
-        if (x >= SIZE_HEAP) break;
-        block = (Block*)(MY_HEAP + x);
-    }
-
-    if (x >= SIZE_HEAP && calculateSize >= size) {
-        return fragmentAllocation(size, firstFreeBlock, requiredBlocks);
-    }
-    return NULL;
-}
-
 void* my_malloc(size_t size){
     Block* block = NULL;
     
     Block* toLeft = CURRENT;
     Block* toRight = CURRENT;
+
+    int requiredBlocks = 0;
+    Block* firstLeft = NULL;
+    Block* firstRignt = NULL;
+    
+    size_t calculateSize = 0;
+
 
     while ((uint8_t*)toLeft >= MY_HEAP || (uint8_t*)toRight < MY_HEAP + SIZE_HEAP)
     {
@@ -127,13 +105,34 @@ void* my_malloc(size_t size){
             block = toRight;
             break;
         }
+
+        if (toLeft->is_free == 1 && calculateSize < size){
+             calculateSize += toLeft->size;
+             requiredBlocks++;
+             firstLeft = toLeft;
+        }
+
+        if (toRight->is_free == 1 && calculateSize)
+        {
+            if (firstRignt == NULL) firstRignt = toRight;
+            calculateSize += toRight->size;
+            requiredBlocks++;
+        }
         
         Block* endPrev = toLeft - 1;
         toLeft = (Block*)((uint8_t*)toLeft - (sizeof(Block)*2) - endPrev->size);
         toRight = (Block*)((uint8_t*)toRight + (sizeof(Block)*2) + toRight->size);
     }
 
-    if (block == NULL) return my_malloc_fragment(size);
+    if (block == NULL){
+        if (calculateSize < size) return NULL;
+        if (firstLeft == NULL)
+        {
+            return fragmentAllocation(size, firstRignt, requiredBlocks);
+        }
+        return fragmentAllocation(size, firstLeft, requiredBlocks);
+        
+    }
 
     size_t saveSize = block->size;
     allocate(size, block, NULL);
@@ -173,7 +172,6 @@ void combineNext(Block* block, Block* endBlock){
         endNextBlock->size = block->size;
     }
 }
-
 
 void my_free(void *ptr){
     Block* block = ((Block*)ptr) - 1;
