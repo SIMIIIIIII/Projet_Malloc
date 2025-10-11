@@ -5,11 +5,14 @@
 #define SIZE_HEAP 64000
 uint8_t MY_HEAP[SIZE_HEAP];
 
+
 typedef struct {
     size_t size;
     uint8_t is_free;
     void* nextPart;
 } Block;
+
+Block* CURRENT;
 
 void init(void){
     Block* block = (Block*)MY_HEAP;
@@ -20,6 +23,7 @@ void init(void){
     Block* endBlock = (Block*)(MY_HEAP + SIZE_HEAP - sizeof(Block));
     endBlock->size = SIZE_HEAP - (sizeof(Block)*2);
     endBlock->is_free = 1;
+    CURRENT = block;
 }
 
 void endBlock(Block* block, size_t size, uint8_t is_free){
@@ -33,6 +37,7 @@ void allocate(size_t size, Block *block, Block* next_part){
     block->is_free = 0;
     block->nextPart = (void*) next_part;
     endBlock(block, size, 0);
+    CURRENT = block;
 }
 
 void prepareNextBloc(Block* block, size_t totalSize, size_t size){
@@ -40,8 +45,8 @@ void prepareNextBloc(Block* block, size_t totalSize, size_t size){
     nextBlock->is_free = 1;
     nextBlock->size = totalSize - size - (sizeof(Block)*2);
     endBlock(nextBlock, nextBlock->size, 1);
+    CURRENT = nextBlock;
 }
-
 
 void* fragmentAllocation(size_t size, Block* firstBlock, int requiredBlocks){
     Block* blocks[requiredBlocks];
@@ -75,14 +80,14 @@ void* fragmentAllocation(size_t size, Block* firstBlock, int requiredBlocks){
     
 }
 
-void* my_malloc(size_t size){
-    Block* block = (Block*)MY_HEAP;
+void* my_malloc_fragment(size_t size){
     size_t x = 0;
+    Block* block = (Block*)MY_HEAP;
     int requiredBlocks = 0;
     Block* firstFreeBlock = NULL;
     size_t calculateSize = 0;
 
-    while (x < SIZE_HEAP && (block->is_free == 0 || block->size < size)) {
+    while (x < SIZE_HEAP && calculateSize < size) {
         if (block->size > SIZE_HEAP) return NULL;
 
         if (block->is_free == 1){
@@ -92,7 +97,7 @@ void* my_malloc(size_t size){
             }
             if (firstFreeBlock == NULL) firstFreeBlock = block;
         }
-        
+            
         x += sizeof(Block) + block->size + sizeof(Block);
         if (x >= SIZE_HEAP) break;
         block = (Block*)(MY_HEAP + x);
@@ -101,6 +106,34 @@ void* my_malloc(size_t size){
     if (x >= SIZE_HEAP && calculateSize >= size) {
         return fragmentAllocation(size, firstFreeBlock, requiredBlocks);
     }
+    return NULL;
+}
+
+void* my_malloc(size_t size){
+    Block* block = NULL;
+    
+    Block* toLeft = CURRENT;
+    Block* toRight = CURRENT;
+
+    while ((uint8_t*)toLeft >= MY_HEAP || (uint8_t*)toRight < MY_HEAP + SIZE_HEAP)
+    {
+        if (toLeft->is_free == 1 && toLeft->size >= size)
+        {
+            block = toLeft;
+            break;
+        }
+        if (toRight->is_free == 1 && toRight->size >= size)
+        {
+            block = toRight;
+            break;
+        }
+        
+        Block* endPrev = toLeft - 1;
+        toLeft = (Block*)((uint8_t*)toLeft - (sizeof(Block)*2) - endPrev->size);
+        toRight = (Block*)((uint8_t*)toRight + (sizeof(Block)*2) + toRight->size);
+    }
+
+    if (block == NULL) return my_malloc_fragment(size);
 
     size_t saveSize = block->size;
     allocate(size, block, NULL);
@@ -181,7 +214,7 @@ int main(void) {
     init();
 
     int x = leftMemory();
-    printf("left initial: %d\n", x);
+    printf("memoire initial: %d\n", x);
 
     char *str1 = (char*) my_malloc(20);
     char *str2 = (char*) my_malloc(20);
@@ -190,15 +223,15 @@ int main(void) {
     char *str5 = (char*) my_malloc(1000);
 
     x = leftMemory();
-    printf("left after allocs: %d\n", x);
+    printf("memoire apres allocs: %d\n", x);
 
     my_free(str4);
     x = leftMemory();
-    printf("left after free str4: %d\n", x);
+    printf("memoir apres free str4: %d\n", x);
 
     char *str6 = (char*) my_malloc(2000);
     x = leftMemory();
-    printf("left after alloc 2000: %d\n", x);
+    printf("memoire apres alloc 2000: %d\n", x);
 
     return 0;
 }
