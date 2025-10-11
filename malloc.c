@@ -51,7 +51,6 @@ void prepareNextBloc(Block* block, size_t totalSize, size_t size){
 void* fragmentAllocation(size_t size, Block* firstBlock, int requiredBlocks){
     Block* blocks[requiredBlocks];
     blocks[0] = firstBlock;
-
     int i = 1;
     
     while ((uint8_t*)firstBlock < MY_HEAP + SIZE_HEAP && i <requiredBlocks)
@@ -82,16 +81,12 @@ void* fragmentAllocation(size_t size, Block* firstBlock, int requiredBlocks){
 
 void* my_malloc(size_t size){
     Block* block = NULL;
-    
     Block* toLeft = CURRENT;
     Block* toRight = CURRENT;
-
     int requiredBlocks = 0;
     Block* firstLeft = NULL;
     Block* firstRignt = NULL;
-    
     size_t calculateSize = 0;
-
 
     while ((uint8_t*)toLeft >= MY_HEAP || (uint8_t*)toRight < MY_HEAP + SIZE_HEAP)
     {
@@ -117,8 +112,7 @@ void* my_malloc(size_t size){
             if (firstRignt == NULL) firstRignt = toRight;
             calculateSize += toRight->size;
             requiredBlocks++;
-        }
-        
+        }      
         Block* endPrev = toLeft - 1;
         toLeft = (Block*)((uint8_t*)toLeft - (sizeof(Block)*2) - endPrev->size);
         toRight = (Block*)((uint8_t*)toRight + (sizeof(Block)*2) + toRight->size);
@@ -130,8 +124,7 @@ void* my_malloc(size_t size){
         {
             return fragmentAllocation(size, firstRignt, requiredBlocks);
         }
-        return fragmentAllocation(size, firstLeft, requiredBlocks);
-        
+        return fragmentAllocation(size, firstLeft, requiredBlocks);  
     }
 
     size_t saveSize = block->size;
