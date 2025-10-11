@@ -8,6 +8,7 @@ uint8_t MY_HEAP[SIZE_HEAP];
 typedef struct {
     size_t size;
     uint8_t is_free;
+    void* nextPart;
 } Block;
 
 typedef struct {
@@ -20,6 +21,7 @@ void init(void){
     Block* block = (Block*)MY_HEAP;
     block->size = SIZE_HEAP - sizeof(Block) - sizeof(EndBlock);
     block->is_free = 1;
+    block->nextPart = NULL;
 
     EndBlock* endBlock = (EndBlock*)(MY_HEAP + SIZE_HEAP - sizeof(EndBlock));
     endBlock->size = SIZE_HEAP - sizeof(Block) - sizeof(EndBlock);
@@ -35,9 +37,10 @@ void endBlock(Block* block, size_t size, uint8_t is_free){
     endBlock->begin_block = block;
 }
 
-void allocate(size_t size, Block *block){
+void allocate(size_t size, Block *block, Block* next_part){
     block->size = size;
     block->is_free = 0;
+    block->nextPart = (void*) next_part;
     endBlock(block, size, 0);
 }
 
@@ -48,22 +51,68 @@ void prepareNextBloc(Block* block, size_t totalSize, size_t size){
     endBlock(nextBlock, nextBlock->size, 1);
 }
 
+
+void* fragmentAllocation(size_t size, Block* firstBlock, int requiredBlocks){
+    Block* blocks[requiredBlocks];
+    blocks[0] = firstBlock;
+
+    int i = 1;
+    
+    while ((uint8_t*)firstBlock < MY_HEAP + SIZE_HEAP && i <requiredBlocks)
+    {
+        if (firstBlock->is_free == 1){
+            blocks[i] = firstBlock;
+            i++;
+        }
+        firstBlock = (Block*)((uint8_t*)firstBlock + sizeof(Block) + firstBlock->size, sizeof(EndBlock));
+    }
+
+    for (size_t j = 0; j < requiredBlocks; j++)
+    {
+        if (j == requiredBlocks-1)
+        {
+            allocate(size, blocks[j], NULL);
+            prepareNextBloc(blocks[j], blocks[j]->size, size);
+        }
+        else{
+            allocate(blocks[j]->size, blocks[j], blocks[j+1]);
+            size -= blocks[j]->size;
+        }
+        
+    }
+    return (void*)(blocks[0] + 1);
+    
+}
+
 void* my_malloc(size_t size){
     Block* block = (Block*)MY_HEAP;
     size_t x = 0;
+    int requiredBlocks = 0;
+    Block* firstFreeBlock = NULL;
+    size_t calculateSize = 0;
 
     while (x < SIZE_HEAP && (block->is_free == 0 || block->size < size)) {
         if (block->size > SIZE_HEAP) return NULL;
+
+        if (block->is_free == 1){
+            if (calculateSize < size){
+                calculateSize += block->size;
+                requiredBlocks++;
+            }
+            if (firstFreeBlock == NULL) firstFreeBlock = block;
+        }
         
         x += sizeof(Block) + block->size + sizeof(EndBlock);
         if (x >= SIZE_HEAP) break;
         block = (Block*)(MY_HEAP + x);
     }
 
-    if (x >= SIZE_HEAP) return NULL;
+    if (x >= SIZE_HEAP && calculateSize >= size) {
+        return fragmentAllocation(size, firstFreeBlock, requiredBlocks);
+    }
 
     size_t saveSize = block->size;
-    allocate(size, block);
+    allocate(size, block, NULL);
 
     if (size + sizeof(Block) + sizeof(EndBlock) <= saveSize)
     {
@@ -112,6 +161,10 @@ void my_free(void *ptr){
     EndBlock* endBlock = (EndBlock*)((uint8_t*)block + sizeof(block) + block->size);
     if ((uint8_t*)endBlock < MY_HEAP || (uint8_t*)endBlock >= MY_HEAP + SIZE_HEAP) return;
     endBlock->is_free = 1;
+
+    if (block->nextPart != NULL) my_free(block->nextPart);
+    
+    block->nextPart = NULL;
     combinePrev(block, endBlock);
     combineNext(block, endBlock);
 }
