@@ -5,7 +5,6 @@
 #define SIZE_HEAP 64000
 uint8_t MY_HEAP[SIZE_HEAP];
 
-
 typedef struct {
     size_t size;
     uint8_t is_free;
@@ -40,7 +39,7 @@ void allocate(size_t size, Block *block, Block* next_part){
     CURRENT = block;
 }
 
-void prepareNextBloc(Block* block, size_t totalSize, size_t size){
+void prepareNextBlock(Block* block, size_t totalSize, size_t size){
     Block *nextBlock = (Block*)((uint8_t*)block + (sizeof(Block)*2) + size);
     nextBlock->is_free = 1;
     nextBlock->size = totalSize - size - (sizeof(Block)*2);
@@ -67,16 +66,14 @@ void* fragmentAllocation(size_t size, Block* firstBlock, int requiredBlocks){
         if (j == requiredBlocks-1)
         {
             allocate(size, blocks[j], NULL);
-            prepareNextBloc(blocks[j], blocks[j]->size, size);
+            prepareNextBlock(blocks[j], blocks[j]->size, size);
         }
         else{
             allocate(blocks[j]->size, blocks[j], blocks[j+1]);
             size -= blocks[j]->size;
         }
-        
     }
     return (void*)(blocks[0] + 1);
-    
 }
 
 void* my_malloc(size_t size){
@@ -100,19 +97,17 @@ void* my_malloc(size_t size){
             block = toRight;
             break;
         }
-
         if (toLeft->is_free == 1 && calculateSize < size){
              calculateSize += toLeft->size;
              requiredBlocks++;
              firstLeft = toLeft;
         }
-
         if (toRight->is_free == 1 && calculateSize)
         {
             if (firstRignt == NULL) firstRignt = toRight;
             calculateSize += toRight->size;
             requiredBlocks++;
-        }      
+        }
         Block* endPrev = toLeft - 1;
         toLeft = (Block*)((uint8_t*)toLeft - (sizeof(Block)*2) - endPrev->size);
         toRight = (Block*)((uint8_t*)toRight + (sizeof(Block)*2) + toRight->size);
@@ -120,68 +115,22 @@ void* my_malloc(size_t size){
 
     if (block == NULL){
         if (calculateSize < size) return NULL;
-        if (firstLeft == NULL)
-        {
-            return fragmentAllocation(size, firstRignt, requiredBlocks);
-        }
-        return fragmentAllocation(size, firstLeft, requiredBlocks);  
+        if (firstLeft == NULL) return fragmentAllocation(size, firstRignt, requiredBlocks);
+        return fragmentAllocation(size, firstLeft, requiredBlocks); 
     }
 
     size_t saveSize = block->size;
     allocate(size, block, NULL);
 
-    if (size + (sizeof(Block)*2) <= saveSize)
-    {
-        prepareNextBloc(block, saveSize, size);
-    }
+    if (size + (sizeof(Block)*2) <= saveSize) prepareNextBlock(block, saveSize, size);
     
     return (void*)(block + 1);
 }
 
-void combinePrev(Block* block, Block* endBlock){
-    Block* endPrevBlock = block - 1;
-    if ((uint8_t*)endPrevBlock < MY_HEAP || (uint8_t*)endPrevBlock >= MY_HEAP + SIZE_HEAP) return;
-    if (endPrevBlock->is_free == 1)
-    {
-        Block* prevBlock = (Block*)((uint8_t*)endPrevBlock - endPrevBlock->size - sizeof(Block));
-        if ((uint8_t*)prevBlock < MY_HEAP || (uint8_t*)prevBlock >= MY_HEAP + SIZE_HEAP) return;
-
-        if (prevBlock->is_free == 0) return;
-        prevBlock->size += (sizeof(Block)*2) + block->size;
-        endBlock->size = prevBlock->size;
-    }
-}
-
-void combineNext(Block* block, Block* endBlock){
-    Block* nextBlock = endBlock + 1;
-    if ((uint8_t*)nextBlock < MY_HEAP || (uint8_t*)nextBlock >= MY_HEAP + SIZE_HEAP) return;
-
-    if (nextBlock->is_free == 1)
-    {
-        block->size += (sizeof(Block)*2) + nextBlock->size;
-        Block* endNextBlock = (Block*) ((uint8_t*)nextBlock + sizeof(Block) + nextBlock->size);
-
-        if ((uint8_t*)endNextBlock < MY_HEAP || (uint8_t*)endNextBlock >= MY_HEAP + SIZE_HEAP) return;
-        endNextBlock->size = block->size;
-    }
-}
-
 void my_free(void *ptr){
-    Block* block = ((Block*)ptr) - 1;
-    if ((uint8_t*)block < MY_HEAP || (uint8_t*)block >= MY_HEAP + SIZE_HEAP) return;
-    block->is_free = 1;
-
-    Block* endBlock = (Block*)((uint8_t*)block + sizeof(block) + block->size);
-    if ((uint8_t*)endBlock < MY_HEAP || (uint8_t*)endBlock >= MY_HEAP + SIZE_HEAP) return;
-    endBlock->is_free = 1;
-
-    if (block->nextPart != NULL) my_free(block->nextPart);
-    
-    block->nextPart = NULL;
-    combinePrev(block, endBlock);
-    combineNext(block, endBlock);
 }
 
+/*Juste pour tester si la taille de la heap du départ change*/
 int leftMemory(){
     Block* block = (Block*)MY_HEAP;
     size_t x = 0;
@@ -199,7 +148,6 @@ int leftMemory(){
     }
     return freeMemory;
 }
-
 
 int main(void) {
     init();
