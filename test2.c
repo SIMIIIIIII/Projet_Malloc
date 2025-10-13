@@ -1,0 +1,144 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <assert.h>
+#include "malloc2.h" 
+
+uint8_t MY_HEAP[SIZE_HEAP];
+
+void test_lire_ecrire(){
+    init();
+    // zero
+    ecrire_MD(2,0);
+    assert(lire_MD(2) == 0);
+
+    // petit nombre, uniquement sur l'octet de droite
+    ecrire_MD(4,8);
+    assert(lire_MD(4) == 8);
+
+    // grand nombre, uniquement sur l'octet de gauche
+    ecrire_MD(6,64000);
+    assert(lire_MD(6) == 64000);
+
+    // nombre impair
+    ecrire_MD(8,63999);
+    assert(lire_MD(8) == 63999);
+
+    // fin de heap
+    ecrire_MD(SIZE_HEAP,2);
+    assert(lire_MD(SIZE_HEAP));
+}
+
+void test_init(){
+    init();
+    assert (lire_MD(2) == SIZE_HEAP-4);
+    assert (lire_MD(SIZE_HEAP) == SIZE_HEAP-4);
+}
+
+void test_malloc(){
+    init();
+    // vérifier la bonne réaction si on essaye d'allouer un bloc trop grand
+    char *tab1 = (char*) my_malloc(SIZE_HEAP * sizeof(char));
+    assert(tab1 == NULL);
+    char *tab2 = (char*) my_malloc((SIZE_HEAP-2) * sizeof(char));
+    assert(tab2 == NULL);
+
+    // vérifier le padding de 2 et le flag à 1
+    char *tab3 = (char*) my_malloc(3 * sizeof(char));
+    assert(lire_MD(2) == 5);
+    assert(lire_MD(8) == 5);
+    assert(tab3 == (char*) &MY_HEAP[2]);
+
+    // vérifier la resize de l'espace vide restant
+    assert(lire_MD(10) == SIZE_HEAP-12);
+    assert(lire_MD(SIZE_HEAP) == SIZE_HEAP-12);
+
+    // vérifier la bonne réaction si la resize génère un bloc de taille zéro
+    char *tab4 = (char*) my_malloc((SIZE_HEAP-16) * sizeof(char));
+    assert(lire_MD(SIZE_HEAP-2) == 0);
+    assert(lire_MD(SIZE_HEAP) == 0);
+    assert(tab4 == (char*) &MY_HEAP[10]);
+}
+
+void test_free(){
+    init();
+    char *tab1 = (char*) my_malloc(4 * sizeof(char));
+    char *tab2 = (char*) my_malloc(4 * sizeof(char));
+    char *tab3 = (char*) my_malloc(4 * sizeof(char));
+    char *tab4 = (char*) my_malloc(4 * sizeof(char));
+    char *tab5 = (char*) my_malloc(4 * sizeof(char));
+    char *tab6 = (char*) my_malloc(4 * sizeof(char));
+
+    // vérifier la mise à zéro du flag, sans fusion
+    my_free(tab2);
+    assert(lire_MD(10) == 4);
+    assert(lire_MD(16) == 4);
+
+    // vérifier la fusion vers la droite
+    my_free(tab1);
+    assert(lire_MD(2) == 12);
+    assert(lire_MD(16) == 12); 
+
+    // vérifier la fusion vers la gauche
+    my_free(tab4);
+    my_free(tab5);
+    assert(lire_MD(26) == 12);
+    assert(lire_MD(40) == 12);
+
+    // vérifier la double fusion
+    my_free(tab3);
+    assert(lire_MD(2) == 36);
+    assert(lire_MD(40) == 36);
+
+    // vérifier la remise à zéro lors du dernier free
+    my_free(tab6);
+    assert(lire_MD(2) == SIZE_HEAP-4);
+    assert(lire_MD(SIZE_HEAP) == SIZE_HEAP-4);
+}
+
+//test de la fonction trouve_index1
+void test_trouve1(){
+    init();
+    char *tab1 = (char*) my_malloc(4 * sizeof(char));  
+    char *tab2 = (char*) my_malloc(4 * sizeof(char)); 
+    char *tab3 = (char*) my_malloc(4 * sizeof(char)); 
+    my_free(tab2);
+
+    // la fonction doit ignorer le segment trop petit!
+    char *tab4 = (char*) my_malloc(5 * sizeof(char));
+    assert(tab4 == (char*) &MY_HEAP[26]);
+
+    // la fonction doit faire rentrer le segment dans une taille tout juste assez grande
+    int * nb1 = (int*) my_malloc(sizeof(int));
+    assert(nb1 == (int*) &MY_HEAP[10]);
+
+    init();
+    char *tab5 = (char*) my_malloc(4 * sizeof(char));  
+    char *tab6 = (char*) my_malloc(4 * sizeof(char)); 
+    my_free(tab5);
+
+    // la fonction doit ignorer le segment assez grand mais qui ne permet pas de faire des blocs MD valides
+    char *tab7 = (char*) my_malloc(2 * sizeof(char));
+    assert(tab7 == (char*) &MY_HEAP[18]);
+
+    // le trou proposé est assez grand et permet de glisser des métadonnées adéquates
+    // vérifier que la fonction free transforme adéquatement les MD du nouveau bloc
+    my_free(tab6);
+    char *tab8 = (char*) my_malloc(4 * sizeof(char)); 
+    assert(tab8 = (char*) &MY_HEAP[2]);
+    assert(lire_MD(10) == 4);
+    
+}
+
+int main(void) {
+    test_lire_ecrire();
+    test_init();
+    test_malloc();
+    test_free();
+    test_trouve1();
+    
+    printf("Tous les tests ont réussi 🎉\n");
+    return 0;
+}
+
+//taper : gcc -Wall -Wextra -std=c11 test2.c malloc2.c -o test2
+//et puis : ./test2
