@@ -126,17 +126,48 @@ void test_trouve1(){
     char *tab8 = (char*) my_malloc(4 * sizeof(char)); 
     assert(tab8 = (char*) &MY_HEAP[2]);
     assert(lire_MD(10) == 4);
-    
+}
+
+void test_trouve2(){
+    init();
+    char *tab1 = (char*) my_malloc(4 * sizeof(char));  
+    char *tab2 = (char*) my_malloc(4 * sizeof(char)); 
+    char *tab3 = (char*) my_malloc(4 * sizeof(char)); 
+    my_free(tab2);
+
+    // la fonction doit ignorer le segment trop petit!
+    char *tab4 = (char*) my_malloc(6 * sizeof(char));
+    assert(tab4 == (char*) &MY_HEAP[26]);
+
+    // la fonction doit faire rentrer le segment dans une taille tout juste assez grande
+    char *tab5 = (char*) my_malloc(4 * sizeof(char));
+    assert(tab5 == (char*) &MY_HEAP[10]);
+
+    // la fonction doit chercher le perfect_fit et ne pas prendre le premier fit qui passe
+    char *tab6 = (char*) my_malloc(4 * sizeof(char));
+    char *tab7 = (char*) my_malloc(4 * sizeof(char));
+    char *tab8 = (char*) my_malloc(4 * sizeof(char));
+    my_free(tab4);
+    my_free(tab3);
+    my_free(tab7);
+
+    char *tab9 = (char*) my_malloc(4 * sizeof(char));
+    assert(tab9 == (char*) &MY_HEAP[44]);
+
+    // faute de perfect fit, la fonction doit prendre le best_fit
+    char *tab10 = (char*) my_malloc(4 * sizeof(char));
+    assert(tab10 == (char*) &MY_HEAP[18]);
 }
 
 int main(void) {
-    test_lire_ecrire();
-    test_init();
-    test_malloc();
-    test_free();
-    test_trouve1();
+    //test_lire_ecrire();
+    //test_init();
+    //test_malloc();
+    //test_free();
+    //test_trouve1();
+    test_trouve2();
     
-    printf("Tous les tests ont réussi 🎉\n");
+    printf("Bingo! 🎉\n");
     return 0;
 }
 

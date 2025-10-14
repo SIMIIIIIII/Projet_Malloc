@@ -43,10 +43,17 @@ void ecrire_MD (uint16_t index, uint16_t valeur);
  * La fonction trouve_index1 parcourt le tableau depuis le début (index=0).
  * Elle saute d'un bloc de MD à l'autre pour trouver un endroit où le segment de taille 'size' peut se glisser.
  * Si elle a parcouru l'ensemble du tableau sans parvenir à trouver un endroit adéquat, elle retourne CODE_ERREUR.
- * 
- * Remarque : elle porte l'indice n°1 pour dire que c'est une version basique et qu'on pourra essayer d'autres version plus tard.
  */
 uint16_t trouve_index1 (size_t size);
+
+/**
+ * La fonction trouve_index2 est une version plus performante de trouve_index1.
+ * La fonction parcourt le tableau depuis le début (index=2) et retient le best_fit qu'elle a rencontré.
+ * Si elle trouve un perfect_fit, elle se glisse dedans immédiatement. 
+ * Si elle a parcouru l'ensemble de la mémoire sans trouver de perfect_fit, elle retourne au best_fit qu'elle a trouvé.
+ * Si elle a parcouru l'ensemble du tableau sans parvenir à trouver un endroit adéquat, elle retourne CODE_ERREUR.
+ */
+uint16_t trouve_index2 (size_t size);
 
 /**
  * Fonctions utilitaires qui impriment les deux blocs de métadonnées qui se trouvent AVANT l'index indiqué.
