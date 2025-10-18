@@ -56,6 +56,15 @@ uint16_t trouve_index1 (size_t size);
 uint16_t trouve_index2 (size_t size);
 
 /**
+ * La fonction trouve_index3 est une version plus rapide mais moins judicieuse en terme de mémoire.
+ * La fonction parcourt le tableau depuis le début (index=2) et retient le best_fit qu'elle a rencontré.
+ * Si elle trouve un almost_perfect_fit, elle se glisse dedans immédiatement. 
+ * Si elle a parcouru l'ensemble de la mémoire sans trouver de perfect_fit, elle retourne au best_fit qu'elle a trouvé.
+ * Si elle a parcouru l'ensemble du tableau sans parvenir à trouver un endroit adéquat, elle retourne CODE_ERREUR.
+ */
+uint16_t trouve_index3 (size_t size);
+
+/**
  * Fonctions utilitaires qui impriment les deux blocs de métadonnées qui se trouvent AVANT l'index indiqué.
  * Utiles pour débuguer, pas rendre dans inginious. 
  */

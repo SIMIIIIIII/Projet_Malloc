@@ -87,33 +87,6 @@ void test_malloc_full(){
     }
 }
 
-void test_free_random(){
-    init();
-    char* tab[64];
-    int indices[64];
-    srand(time(NULL)); 
-
-    // créer un tableau de 64 pointeurs vers 64 zones mémoires et un tableau de 64 indices mélangés aléatoirement
-    for (int i=0; i<64; i++){
-        tab[i] = (char*) my_malloc(996 * sizeof(char));
-        assert(tab[i] != NULL);
-        indices[i] = i;
-    }
-    for (int i = 64 - 1; i > 0; i--) {
-        int j = rand() % (i + 1);
-        int tmp = indices[i];
-        indices[i] = indices[j];
-        indices[j] = tmp;
-    }
-
-    // libérer tous les pointeurs dans un ordre aléatoire et vérifier que la mémoire revient à un état "vierge"
-    for (int i=0; i<64; i++){
-        my_free(tab[indices[i]]);
-    }
-    assert (lire_MD(2) == SIZE_HEAP-4);
-    assert (lire_MD(SIZE_HEAP) == SIZE_HEAP-4);
-}
-
 void test_free(){
     init();
     char *tab1 = (char*) my_malloc(4 * sizeof(char));
@@ -150,7 +123,68 @@ void test_free(){
     assert(lire_MD(SIZE_HEAP) == SIZE_HEAP-4);
 }
 
-//test des fonctions trouve_index1 et trouve_index2
+void test_free_random(){
+    init();
+    void* tab[64];
+    int indices[64];
+    srand(time(NULL)); 
+
+    // créer un tableau de 64 pointeurs vers 64 zones mémoires et un tableau de 64 indices mélangés aléatoirement
+    for (int i=0; i<64; i++){
+        tab[i] = my_malloc(996 * sizeof(char));
+        assert(tab[i] != NULL);
+        indices[i] = i;
+    }
+    for (int i = 64 - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        int tmp = indices[i];
+        indices[i] = indices[j];
+        indices[j] = tmp;
+    }
+
+    // libérer tous les pointeurs dans un ordre aléatoire et vérifier que la mémoire revient à un état "vierge"
+    for (int i=0; i<64; i++){
+        my_free(tab[indices[i]]);
+    }
+    assert (lire_MD(2) == SIZE_HEAP-4);
+    assert (lire_MD(SIZE_HEAP) == SIZE_HEAP-4);
+}
+
+void test_stress(){
+    //remplir et vider le tas un certain nombre de fois, vérifier si la mémoire revient à l'état vierge
+    for (int n=0; n<100; n++){
+        srand(time(NULL)); 
+        int size = rand() %10000+4;
+        int nombre = SIZE_HEAP/size;
+
+        void* tab[nombre];
+        int indices[nombre];
+        
+        for (int i=0; i<nombre; i++){
+            tab[i] = my_malloc(size * sizeof(char));
+            assert(tab[i] != NULL);
+            indices[i] = i;
+        }
+
+        srand(time(NULL)); 
+        for (int i = nombre - 1; i > 0; i--) {
+            int j = rand() % (i + 1);
+            int tmp = indices[i];
+            indices[i] = indices[j];
+            indices[j] = tmp;
+        }
+
+        for (int i=0; i<nombre; i++){
+            my_free(tab[indices[i]]);
+        }
+        assert (lire_MD(2) == SIZE_HEAP-4);
+        assert (lire_MD(SIZE_HEAP) == SIZE_HEAP-4);
+
+    }
+
+
+}
+
 void test_trouve1(){
     init();
     char *tab1 = (char*) my_malloc(4 * sizeof(char));  
@@ -219,8 +253,9 @@ int main(void) {
     //test_init();
     //test_malloc();
     //test_malloc_full(); 
-    //test_free_random(); 
     //test_free();
+    test_free_random(); 
+    test_stress();
     //test_trouve1();
     //test_trouve2();
     

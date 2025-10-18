@@ -62,7 +62,7 @@ void *my_malloc(size_t size){
     }
 
     // trouver l'index d'un espace adéquat dans lequel le segment peut se glisser
-    uint16_t index = trouve_index2(size);
+    uint16_t index = trouve_index3(size);
     if (index == CODE_ERREUR){
         printf("La mémoire n'a pas pu allouer un espace pour ce bloc\n");
         return NULL;
@@ -132,6 +132,28 @@ uint16_t trouve_index2 (size_t size){
         else if ((md_g%2 == 0) && (md_g >= size+4) && (md_g < best_size)){
             best_fit = index;
             best_size = md_g;
+        }
+        index += (md_g +4 -(md_g%2));
+    }
+    // best_fit est soit le trou le plus adéquat trouvé, soit le code d'erreur si rien n'a été trouvé.
+    return best_fit;
+}
+
+uint16_t trouve_index3 (size_t size){
+    uint16_t index = 2;
+    uint16_t best_fit = CODE_ERREUR;
+    uint16_t best_size = CODE_ERREUR;
+    // lire la MD, si rentre presque parfaitement, retourner l'index. Sinon chercher le trou le plus petit possible.
+    while (index <= SIZE_HEAP-(size+2)){
+        uint16_t md_g = lire_MD(index);
+        if ((md_g%2 == 0) && (md_g >= size)){
+            // first almost perfect fit -> si ça rentre à 10% près en trop, c'est quand même considéré comme bon
+            if ((md_g == size) || (md_g <= (size + ((size*10)/100)))) return index;
+            // best fit 
+            else if ((md_g >= size+4) && (md_g < best_size)){
+                best_fit = index;
+                best_size = md_g;
+            }
         }
         index += (md_g +4 -(md_g%2));
     }
