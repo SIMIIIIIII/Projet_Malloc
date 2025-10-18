@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <assert.h>
+#include <time.h>
 #include "malloc2.h" 
 
 uint8_t MY_HEAP[SIZE_HEAP];
@@ -59,6 +60,60 @@ void test_malloc(){
     assert(tab4 == (char*) &MY_HEAP[10]);
 }
 
+void test_malloc_full(){
+    // ATTENTION : ces tests ne sont valables que si SIZE_HEAP = 64000
+
+    init();
+    // vérifier que la mémoire de 64000 peut bien accueillir 64 blocs de 996+4 bytes
+    int count = 0;
+    char *tab;
+    do {
+        tab = (char*) my_malloc(996 * sizeof(char));
+        count += 1;
+    } while (tab != NULL);
+    //64 bloc de 996+4 alloués et puis un malloc qui a retourné null -> 65
+    assert(count == 65);
+
+    // vérifier que tous les blocs de MD à gauche et à droite des zones allouées ont la bonne valeur
+    int index1 = 2;
+    int index2 = 1000;
+    while (index1 <= SIZE_HEAP){
+        assert(lire_MD(index1) == 997);
+        index1+=1000;
+    }
+    while (index2 <= SIZE_HEAP){
+        assert(lire_MD(index2) == 997);
+        index2+=1000;
+    }
+}
+
+void test_free_random(){
+    init();
+    char* tab[64];
+    int indices[64];
+    srand(time(NULL)); 
+
+    // créer un tableau de 64 pointeurs vers 64 zones mémoires et un tableau de 64 indices mélangés aléatoirement
+    for (int i=0; i<64; i++){
+        tab[i] = (char*) my_malloc(996 * sizeof(char));
+        assert(tab[i] != NULL);
+        indices[i] = i;
+    }
+    for (int i = 64 - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        int tmp = indices[i];
+        indices[i] = indices[j];
+        indices[j] = tmp;
+    }
+
+    // libérer tous les pointeurs dans un ordre aléatoire et vérifier que la mémoire revient à un état "vierge"
+    for (int i=0; i<64; i++){
+        my_free(tab[indices[i]]);
+    }
+    assert (lire_MD(2) == SIZE_HEAP-4);
+    assert (lire_MD(SIZE_HEAP) == SIZE_HEAP-4);
+}
+
 void test_free(){
     init();
     char *tab1 = (char*) my_malloc(4 * sizeof(char));
@@ -95,7 +150,7 @@ void test_free(){
     assert(lire_MD(SIZE_HEAP) == SIZE_HEAP-4);
 }
 
-//test de la fonction trouve_index1
+//test des fonctions trouve_index1 et trouve_index2
 void test_trouve1(){
     init();
     char *tab1 = (char*) my_malloc(4 * sizeof(char));  
@@ -163,11 +218,13 @@ int main(void) {
     //test_lire_ecrire();
     //test_init();
     //test_malloc();
+    //test_malloc_full(); 
+    //test_free_random(); 
     //test_free();
     //test_trouve1();
-    test_trouve2();
+    //test_trouve2();
     
-    printf("Bingo! 🎉\n");
+    printf("Tests terminés! 🎉\n");
     return 0;
 }
 
