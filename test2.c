@@ -248,16 +248,62 @@ void test_trouve2(){
     assert(tab10 == (char*) &MY_HEAP[18]);
 }
 
+void test_uniform_random_steps(){
+    init();
+
+    //déterminer un range de taille pour les données à allouer
+    uint16_t sizemax = 500;
+    uint16_t sizemin = 250;
+    uint16_t length = SIZE_HEAP/sizemin;
+
+    //compteurs de résultats : 
+    int nulls = 0;
+    int mallocs = 0;
+    int frees = 0;
+
+    // créer un tableau qui contient tous les pointeurs vers les zones allouées
+    void* tab[length];
+    for (uint16_t i=0; i<length; i++){
+        tab[i] = NULL;
+    }
+
+    for (int step=0; step<100000; step++){
+        uint16_t i = rand() % length; // choisir une case aléatoire
+        if (tab[i]==NULL){
+            size_t size = sizemin + rand() % (sizemax - sizemin + 1);
+            tab[i] = my_malloc(size);
+            if (tab[i]==NULL){
+                nulls++;
+            }
+            
+            else {
+                mallocs++;
+            }
+        }
+        else {
+            my_free(tab[i]);
+            tab[i] = NULL;
+            frees++;
+        }
+    }
+  
+    printf("Résultats du test uniform_random_time : \n");
+    printf("Nombre de mallocs : %d\n", mallocs);
+    printf("Nombre de frees : %d\n", frees);
+    printf("Nombre de nuls : %d\n", nulls);
+}
+
 int main(void) {
     //test_lire_ecrire();
     //test_init();
     //test_malloc();
     //test_malloc_full(); 
     //test_free();
-    test_free_random(); 
-    test_stress();
+    //test_free_random(); 
+    //test_stress();
     //test_trouve1();
     //test_trouve2();
+    test_uniform_random_steps();
     
     printf("Tests terminés! 🎉\n");
     return 0;
