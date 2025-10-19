@@ -7,16 +7,21 @@
 //   à copier-coller dans Inginious  //
 ///////////////////////////////////////
 
+//ATTENTION, interdit d'utiliser des variables statiques! placer ça qlq part dans le tableau si la fonction est gardée
+uint16_t i_curr;
+
 void init(){
     //métadonnées d'initialisation : 
     ecrire_MD(2,SIZE_HEAP-4);
     ecrire_MD(SIZE_HEAP,SIZE_HEAP-4);
+    i_curr = 2;
 }
 
 void my_free(void *pointer){
     // récupérer l'index du tableau
     uint8_t *addr = (uint8_t*) pointer;
-    uint16_t index = addr - MY_HEAP;           
+    uint16_t index = addr - MY_HEAP; 
+    uint16_t new_curr = index;          
 
     // indiquer que le segment est désormais libre
     uint16_t taille = lire_MD(index)-1;         
@@ -51,8 +56,10 @@ void my_free(void *pointer){
 
                 MY_HEAP[index_g-segment_g_md-4] = taille_totale_g & 0xFF;
                 MY_HEAP[index_g-segment_g_md-3] = (taille_totale_g >> 8) & 0xFF;
+                new_curr = index_g-segment_g_md-2;
         }
     }
+    i_curr = new_curr;
 }
 
 void *my_malloc(size_t size){
@@ -161,6 +168,40 @@ uint16_t trouve_index3 (size_t size){
     return best_fit;
 }
 
+uint16_t trouve_index4 (size_t size){
+    uint16_t toleft = i_curr-2;
+    uint16_t toright = i_curr;
+    uint16_t best_fit = CODE_ERREUR;
+    uint16_t best_size = CODE_ERREUR;
+    while ((toleft >=0)||(toright <= SIZE_HEAP)){
+        if (toright <=SIZE_HEAP){
+            uint16_t md_g = lire_MD(toright);
+            if ((md_g%2 == 0) && (md_g >= size)){
+                // first almost perfect fit -> si ça rentre à 10% près en trop, c'est quand même considéré comme bon
+                if ((md_g == size) || (md_g <= (size + ((size*10)/100)))) return toright;
+                // best fit 
+                else if ((md_g >= size+4) && (md_g < best_size)){
+                    best_fit = toright;
+                    best_size = md_g;
+                }
+            }
+            toright += (md_g +4 -(md_g%2));
+        }
+        if (toleft >=0){
+            uint16_t md_d = lire_MD(toleft);
+            if ((md_d%2 == 0) && (md_d >= size)){
+                // first almost perfect fit -> si ça rentre à 10% près en trop, c'est quand même considéré comme bon
+                if ((md_d == size) || (md_d <= (size + ((size*10)/100)))) return toleft-2-md_d;
+                // best fit 
+                else if ((md_d >= size+4) && (md_d < best_size)){
+                    best_fit = toleft-2-md_d;
+                    best_size = md_d;
+                }
+            }
+            toleft -= (2+md_d-(md_d%2));
+        }
+    }
+}
 void print_binary(uint8_t byte) {
     for (int i = 7; i >= 0; i--) {
         printf("%d", (byte >> i) & 1);
