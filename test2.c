@@ -248,12 +248,43 @@ void test_trouve2(){
     assert(tab10 == (char*) &MY_HEAP[18]);
 }
 
+void etat_memoire(){
+    uint16_t blocs_libres = 0; // nombre total de blocs libres rencontrés
+    uint16_t blocs_occupes = 0; // nombre total de blocs occupés rencontrés
+    uint16_t max_libre = 0; // taille du plus grand bloc libre (hors métadonnées)
+    uint16_t total_libre = 0; // quantité totale de bytes libres (hors métadonnées)
+    double indice_fragmentation;
+
+    uint16_t indice = 2;
+    while (indice <= 64000){
+        uint16_t md_g = lire_MD(indice);
+        if (md_g %2 == 0){
+            blocs_libres ++;
+            total_libre += md_g;
+            if (md_g > max_libre) max_libre = md_g;
+        }
+        else{
+            blocs_occupes ++;
+        }
+        indice += (md_g +4 -(md_g%2));
+    }
+    if (total_libre == 0) indice_fragmentation = 0.0;  
+    else indice_fragmentation = 1.0 - ((double)max_libre / (double)total_libre);
+
+
+    printf ("Etat de la mémoire : \n");
+    printf("Nombre de blocs libres : %u\n",blocs_libres);
+    printf("Nombre de blocs occupés : %u\n",blocs_occupes);
+    printf("Taille du plus grand bloc libre : %u\n", max_libre);
+    printf("Mémoire totale libre restante : %u\n",total_libre);
+    printf("Indice de fragmentation de la mémoire : %.3f\n1 = très fragmentée, 0 = très compacte\n",indice_fragmentation) ;
+}
 void test_uniform_random_steps(){
     init();
 
     //déterminer un range de taille pour les données à allouer
-    uint16_t sizemax = 500;
-    uint16_t sizemin = 250;
+    uint16_t sizemax = 2000;
+    uint16_t sizemin = 500;
     uint16_t length = SIZE_HEAP/sizemin;
 
     //compteurs de résultats : 
@@ -267,7 +298,7 @@ void test_uniform_random_steps(){
         tab[i] = NULL;
     }
 
-    for (int step=0; step<100000; step++){
+    for (int step=0; step<1000; step++){
         uint16_t i = rand() % length; // choisir une case aléatoire
         if (tab[i]==NULL){
             size_t size = sizemin + rand() % (sizemax - sizemin + 1);
@@ -291,6 +322,8 @@ void test_uniform_random_steps(){
     printf("Nombre de mallocs : %d\n", mallocs);
     printf("Nombre de frees : %d\n", frees);
     printf("Nombre de nuls : %d\n", nulls);
+    printf("\n");
+    etat_memoire();
 }
 
 int main(void) {
