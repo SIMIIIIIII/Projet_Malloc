@@ -3,10 +3,12 @@
 #include <assert.h>
 #include <time.h>
 #include <sys/time.h>
-#include "malloc2.h" 
+#include <stdlib.h>
+#include "malloc.h"
 
-uint8_t MY_HEAP[SIZE_HEAP];
+//uint8_t MY_HEAP[SIZE_HEAP];
 
+/*
 void test_lire_ecrire(){
     init();
     // zero
@@ -281,6 +283,8 @@ void etat_memoire(){
     printf("Indice de fragmentation de la mémoire : %.3f\n1 = très fragmentée, 0 = très compacte\n",indice_fragmentation) ;
 }
 
+*/
+
 void test_random_steps(){
     init();
 
@@ -373,11 +377,13 @@ void test_random_time(){
         gettimeofday(&now, NULL);
         elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
     }
-  
+    
+    
     printf("Résultats du test random_time : \n");
     printf("Nombre de mallocs : %d\n", mallocs);
     printf("Nombre de frees : %d\n", frees);
     printf("Nombre de nuls : %d\n", nulls);
+    printf("Nombre de elapse : %d\n", elapsed);
     printf("\n");
     etat_memoire();
     printf("\n");

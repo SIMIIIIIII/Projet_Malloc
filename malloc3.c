@@ -46,11 +46,12 @@ void my_free(void *pointer){
     if (index-2 > RESERVE+2){
         uint16_t segment_g_md = lire_g(index-2); 
         if (segment_g_md%2 == 0){
-            uint16_t index = index-4-segment_g_md;
-            uint16_t taille = taille + segment_g_md + 4; 
-
-            ecrire_g(index,taille);
-            ecrire_d(index+taille,taille);
+            uint16_t new_index = index-4-segment_g_md;
+            uint16_t new_taille = taille + segment_g_md + 4; 
+            ecrire_g(new_index, new_taille);
+            ecrire_d(new_index+new_taille, new_taille);
+            index = new_index;
+            taille = new_taille;
         }
     }
     
@@ -125,54 +126,66 @@ void *my_malloc(size_t size){
 
 }
 
-
-
 uint16_t my_find_asc(size_t size, uint16_t start){
     uint16_t index = start;
     uint16_t md;
 
     uint16_t best_fit = CODE_ERREUR;
-    uint16_t best_size = CODE_ERREUR;
+    uint16_t best_size = SIZE_HEAP; // Initialiser à une grande valeur
 
-    if (lire_g(index)%2!=0) index = nex_free_d(start);
-    start = index; // mettre à jour le start sinon la condition du while pose problème
+    // Aller au premier bloc libre
+    if (lire_g(index)%2!=0) {
+        index = next_free_d(start);
+        if (index == CODE_ERREUR) return CODE_ERREUR;
+    }
+    uint16_t first_index = index; // Sauvegarder le point de départ
 
     do{
         md = lire_g(index);
-        //autorise une marge de 10% pour le perfect fit
-        if ((md == size) || ((md>=size)&&(md<=size+((size*10)/100)))) return index;
-        //si pas de perfect-fit trouvé, on continue de mettre à jour le best-fit
+        // Perfect fit avec marge de 10%
+        if ((md == size) || ((md>=size)&&(md<=size+((size*10)/100)))) {
+            return index;
+        }
+        // Best fit
         else if ((md >= size) && (md < best_size)){
             best_fit = index;
             best_size = md;
         }
-        index = lire_d(index);
-
-    } while (index != start); 
-    return CODE_ERREUR;
+        index = next_free_d(index);
+    } while (index != CODE_ERREUR && index != first_index); 
+    
+    return best_fit; 
 }
+
 uint16_t my_find_desc(size_t size, uint16_t start){
     uint16_t index = start;
     uint16_t md;
 
     uint16_t best_fit = CODE_ERREUR;
-    uint16_t best_size = CODE_ERREUR;
+    uint16_t best_size = SIZE_HEAP; // Initialiser à une grande valeur
 
-    if (lire_g(index)%2!=0) index = nex_free_g(start);
-    start = index; // mettre à jour le start sinon la condition du while pose problème
+    // Aller au premier bloc libre depuis la droite
+    if (lire_g(index-2)%2!=0) {
+        index = next_free_g(start);
+        if (index == CODE_ERREUR) return CODE_ERREUR;
+    }
+    uint16_t first_index = index; // Sauvegarder le point de départ
 
     do{
         md = lire_g(index);
-        //autorise une marge de 10% pour le perfect fit
-        if ((md == size) || ((md>=size)&&(md<=size+((size*10)/100)))) return index;
+        // Perfect fit avec marge de 10%
+        if ((md == size) || ((md>=size)&&(md<=size+((size*10)/100)))) {
+            return index;
+        }
+        // Best fit
         else if ((md >= size) && (md < best_size)){
             best_fit = index;
             best_size = md;
         }
-        index = lire_d(index+md);
-
-    } while (index != start); 
-    return CODE_ERREUR;
+        index = next_free_g(index);
+    } while (index != CODE_ERREUR && index != first_index);
+    
+    return best_fit;
 }
 
 
@@ -204,25 +217,29 @@ void ecrire_d(uint16_t index, uint16_t valeur){
 uint16_t next_free_d(uint16_t index){
     uint16_t find = index;
     uint16_t md = lire_g(find);
+    
     do {
-        find += md+4-(md%2);
-        if (find>SIZE_HEAP-6) find = RESERVE+2;
+        find = lire_d(find);
+        if (find == CODE_ERREUR || find >= SIZE_HEAP) {
+            return CODE_ERREUR;
+        }
         md = lire_g(find);
-        if (md%2 == 0) return find;
-        } while (index != find);
-    return CODE_ERREUR;
+    } while (md%2 != 0);
+    
+    return find;
 }
 
 uint16_t next_free_g(uint16_t index){
     uint16_t find = index;
     uint16_t md;
+    
     do {
-        find = find-2;
-        if (find<=RESERVE) find = SIZE_HEAP;
+        find = lire_g(find + md);
+        if (find == CODE_ERREUR || find < RESERVE) {
+            return CODE_ERREUR;
+        }
         md = lire_g(find);
-        find = find-(md-(md%2))-2;
-        if (md%2==0) return find;
-    } while (find!= index);
-    return CODE_ERREUR;
-
+    } while (md%2 != 0);
+    
+    return find;
 }

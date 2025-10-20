@@ -1,228 +1,208 @@
 #include <stdio.h>
 #include <stdint.h>
-#include <string.h> 
+#include <string.h>
 
 #define SIZE_HEAP 64000
 uint8_t MY_HEAP[SIZE_HEAP];
 
 
+//j'ai fait beaucoup de if dans des fonctions parce qu'il y avait beaucoup de faute de segmentation
+//donc c'est possible que tu trouves de if inutiles
+
 typedef struct {
-    size_t size;
-    uint8_t is_free;
-    void* nextPart;
+    size_t size;     
+    uint8_t is_free; // 1 si libre et 0 si occupé;
 } Block;
 
-Block* CURRENT;
+Block* CURRENT = NULL;// le block libre courrant;
 
-void init(void){
+/* return la premier le debut de la heap */
+uint8_t* heap_start(){
+    return MY_HEAP;
+}
+
+/* return la fin de la heap */
+uint8_t* heap_end(){
+    return MY_HEAP + SIZE_HEAP;
+}
+
+/* return la fin d'un bloc */
+Block* end_of_block(Block* b) {
+    return (Block*)((uint8_t*)b + sizeof(Block) + b->size);
+}
+
+/* met les méta données de la fin du bloc */
+void set_end_block(Block* block) {
+    Block* end_block = end_of_block(block);
+    if ((uint8_t*)end_block >= heap_start() && (uint8_t*)end_block + sizeof(Block) <= heap_end()) {
+        end_block->size = block->size;
+        end_block->is_free = block->is_free;
+    }
+}
+
+/* regarde si le block se trouve dans l'interval de la heap */
+int in_heap(Block* block) {
+    return ((uint8_t*)block >= heap_start()) && ((uint8_t*)block + sizeof(Block) <= heap_end());
+}
+
+/* initialise la heap avec les méta données du début et de la fin */
+void init(){
     Block* block = (Block*)MY_HEAP;
-    block->size = SIZE_HEAP - (sizeof(Block)*2);
+    block->size = SIZE_HEAP - (2 * sizeof(Block));
     block->is_free = 1;
-    block->nextPart = NULL;
-
-    Block* endBlock = (Block*)(MY_HEAP + SIZE_HEAP - sizeof(Block));
-    endBlock->size = SIZE_HEAP - (sizeof(Block)*2);
-    endBlock->is_free = 1;
+    set_end_block(block);
     CURRENT = block;
 }
 
-void endBlock(Block* block, size_t size, uint8_t is_free){
-    Block* endBlock = (Block*)((uint8_t*)block + sizeof(Block) + size);
-    endBlock->size = size;
-    endBlock->is_free = is_free;
-}
+/* retourne le block précédent qu'il soit libre ou occupé
+ * apres il faut adapter pour retourner que le block libre
+ */
+Block* get_prev_block(Block* block) {
+    if (!in_heap(block)) return NULL;
 
-void allocate(size_t size, Block *block, Block* next_part){
-    block->size = size;
-    block->is_free = 0;
-    block->nextPart = (void*) next_part;
-    endBlock(block, size, 0);
-    CURRENT = block;
-}
+    // Si c'est le debut de la heap alors il n'y a pas des blocks précédents
+    if ((uint8_t*)block == heap_start()) return NULL;
 
-void prepareNextBloc(Block* block, size_t totalSize, size_t size){
-    Block *nextBlock = (Block*)((uint8_t*)block + (sizeof(Block)*2) + size);
-    nextBlock->is_free = 1;
-    nextBlock->size = totalSize - size - (sizeof(Block)*2);
-    endBlock(nextBlock, nextBlock->size, 1);
-    CURRENT = nextBlock;
-}
-
-void* fragmentAllocation(size_t size, Block* firstBlock, int requiredBlocks){
-    Block* blocks[requiredBlocks];
-    blocks[0] = firstBlock;
-    int i = 1;
-    
-    while ((uint8_t*)firstBlock < MY_HEAP + SIZE_HEAP && i <requiredBlocks)
-    {
-        if (firstBlock->is_free == 1){
-            blocks[i] = firstBlock;
-            i++;
-        }
-        firstBlock = (Block*)((uint8_t*)firstBlock + (sizeof(Block)*2) + firstBlock->size);
+    // la fin du block précédent
+    Block* end_Prev = (Block*)((uint8_t*)block - sizeof(Block));
+    if ((uint8_t*)end_Prev < heap_start() || (uint8_t*)end_Prev + sizeof(Block) > heap_end()) {
+        return NULL;
     }
 
-    for (size_t j = 0; j < requiredBlocks; j++)
-    {
-        if (j == requiredBlocks-1)
-        {
-            allocate(size, blocks[j], NULL);
-            prepareNextBloc(blocks[j], blocks[j]->size, size);
+    size_t prev_Size = end_Prev->size;
+    if (prev_Size == 0 || prev_Size > SIZE_HEAP) return NULL;
+
+    //on check l'adress du debut du block précédent.
+    uint8_t* prev_Addr = (uint8_t*)end_Prev - sizeof(Block) - prev_Size;
+    if (prev_Addr < heap_start()) return NULL;
+
+    Block* prev = (Block*)prev_Addr;
+    if (!in_heap(prev)) return NULL;
+    
+    //un ckeck de sécurité pour etre sur qu'on a vraiment le debut du block
+    Block* check_End = end_of_block(prev);
+    if (check_End != end_Prev) return NULL;
+
+    return prev;
+}
+
+/* return le block suivant */
+Block* get_next_block(Block* block) {
+    if (!in_heap(block)) return NULL;
+
+    Block* end = end_of_block(block);
+    if ((uint8_t*)end + sizeof(Block) >= heap_end()) return NULL;
+
+    Block* next = (Block*)((uint8_t*)end + sizeof(Block));
+    if (!in_heap(next)) return NULL;
+    
+    //on verifie si la fin du next block se trouve dans le range de la heap
+    Block* nextEnd = end_of_block(next);
+    if ((uint8_t*)nextEnd + sizeof(Block) > heap_end()) return NULL;
+
+    return next;
+}
+
+/* alloue la mémoire si possible et retourne NULL sinon */
+void* my_malloc(size_t size){
+    if (size == 0 || size > SIZE_HEAP) return NULL;
+
+    Block* block = (Block*)heap_start();
+
+    while ( block != NULL && (uint8_t*)block + sizeof(Block) <= heap_end()) {
+        if (!in_heap(block)) break;
+
+        if (block->is_free && block->size >= size) {
+            size_t old_size = block->size;
+            
+            //si block restant peux au moins contenir le 2 block de méta données et 1 bytes
+            if (old_size >= size + 2 * sizeof(Block) + 1) {
+                block->size = size;
+                block->is_free = 0;
+                set_end_block(block);
+                
+                //on defini un block libre sur la mémoire restante
+                Block* next = (Block*)((uint8_t*)block + sizeof(Block) + block->size + sizeof(Block));
+                if ((uint8_t*)next + sizeof(Block) <= heap_end()) {
+                    next->is_free = 1;
+                    next->size = old_size - size - 2 * sizeof(Block);
+                    set_end_block(next);
+                }
+            } else {
+                block->is_free = 0;
+                block->size = old_size;
+                set_end_block(block);
+            }
+            return (void*)(block + 1);
         }
-        else{
-            allocate(blocks[j]->size, blocks[j], blocks[j+1]);
-            size -= blocks[j]->size;
-        }
+        block = get_next_block(block);
         
     }
-    return (void*)(blocks[0] + 1);
-    
-}
-
-void* my_malloc(size_t size){
-    Block* block = NULL;
-    Block* toLeft = CURRENT;
-    Block* toRight = CURRENT;
-    int requiredBlocks = 0;
-    Block* firstLeft = NULL;
-    Block* firstRignt = NULL;
-    size_t calculateSize = 0;
-
-    while ((uint8_t*)toLeft >= MY_HEAP || (uint8_t*)toRight < MY_HEAP + SIZE_HEAP)
-    {
-        if (toLeft->is_free == 1 && toLeft->size >= size)
-        {
-            block = toLeft;
-            break;
-        }
-        if (toRight->is_free == 1 && toRight->size >= size)
-        {
-            block = toRight;
-            break;
-        }
-
-        if (toLeft->is_free == 1 && calculateSize < size){
-             calculateSize += toLeft->size;
-             requiredBlocks++;
-             firstLeft = toLeft;
-        }
-
-        if (toRight->is_free == 1 && calculateSize)
-        {
-            if (firstRignt == NULL) firstRignt = toRight;
-            calculateSize += toRight->size;
-            requiredBlocks++;
-        }      
-        Block* endPrev = toLeft - 1;
-        toLeft = (Block*)((uint8_t*)toLeft - (sizeof(Block)*2) - endPrev->size);
-        toRight = (Block*)((uint8_t*)toRight + (sizeof(Block)*2) + toRight->size);
-    }
-
-    if (block == NULL){
-        if (calculateSize < size) return NULL;
-        if (firstLeft == NULL)
-        {
-            return fragmentAllocation(size, firstRignt, requiredBlocks);
-        }
-        return fragmentAllocation(size, firstLeft, requiredBlocks);  
-    }
-
-    size_t saveSize = block->size;
-    allocate(size, block, NULL);
-
-    if (size + (sizeof(Block)*2) <= saveSize)
-    {
-        prepareNextBloc(block, saveSize, size);
-    }
-    
-    return (void*)(block + 1);
-}
-
-void combinePrev(Block* block, Block* endBlock){
-    Block* endPrevBlock = block - 1;
-    if ((uint8_t*)endPrevBlock < MY_HEAP || (uint8_t*)endPrevBlock >= MY_HEAP + SIZE_HEAP) return;
-    if (endPrevBlock->is_free == 1)
-    {
-        Block* prevBlock = (Block*)((uint8_t*)endPrevBlock - endPrevBlock->size - sizeof(Block));
-        if ((uint8_t*)prevBlock < MY_HEAP || (uint8_t*)prevBlock >= MY_HEAP + SIZE_HEAP) return;
-
-        if (prevBlock->is_free == 0) return;
-        prevBlock->size += (sizeof(Block)*2) + block->size;
-        endBlock->size = prevBlock->size;
-    }
-}
-
-void combineNext(Block* block, Block* endBlock){
-    Block* nextBlock = endBlock + 1;
-    if ((uint8_t*)nextBlock < MY_HEAP || (uint8_t*)nextBlock >= MY_HEAP + SIZE_HEAP) return;
-
-    if (nextBlock->is_free == 1)
-    {
-        block->size += (sizeof(Block)*2) + nextBlock->size;
-        Block* endNextBlock = (Block*) ((uint8_t*)nextBlock + sizeof(Block) + nextBlock->size);
-
-        if ((uint8_t*)endNextBlock < MY_HEAP || (uint8_t*)endNextBlock >= MY_HEAP + SIZE_HEAP) return;
-        endNextBlock->size = block->size;
-    }
+    return NULL;
 }
 
 void my_free(void *ptr){
+    if (!ptr) return;
+
     Block* block = ((Block*)ptr) - 1;
-    if ((uint8_t*)block < MY_HEAP || (uint8_t*)block >= MY_HEAP + SIZE_HEAP) return;
+    if (!in_heap(block)) return;
+
     block->is_free = 1;
+    set_end_block(block);
 
-    Block* endBlock = (Block*)((uint8_t*)block + sizeof(block) + block->size);
-    if ((uint8_t*)endBlock < MY_HEAP || (uint8_t*)endBlock >= MY_HEAP + SIZE_HEAP) return;
-    endBlock->is_free = 1;
-
-    if (block->nextPart != NULL) my_free(block->nextPart);
-    
-    block->nextPart = NULL;
-    combinePrev(block, endBlock);
-    combineNext(block, endBlock);
-}
-
-int leftMemory(){
-    Block* block = (Block*)MY_HEAP;
-    size_t x = 0;
-    int freeMemory = 0;
-
-    while (x < SIZE_HEAP) {
-        if ((uint8_t*)block < MY_HEAP || (uint8_t*)block >= MY_HEAP + SIZE_HEAP) break;
-        if (block->size > SIZE_HEAP) break;
-
-        if (block->is_free == 1) freeMemory += (int)block->size;
-
-        x += sizeof(Block) + block->size + sizeof(Block);
-        if (x >= SIZE_HEAP) break;
-        block = (Block*)(MY_HEAP + x);
+    //on fusionne avec le block précédent si libre
+    Block* prev = get_prev_block(block);
+    if (prev && prev->is_free) {
+        Block* next_of_prev = get_next_block(prev);
+        if (next_of_prev == block) {
+            prev->size = prev->size + block->size + 2 * sizeof(Block);
+            prev->is_free = 1;
+            set_end_block(prev);
+            block = prev;
+        }
     }
-    return freeMemory;
+  
+    //on fusionne avec le block suivant si libre
+    Block* next = get_next_block(block);
+    if (next && next->is_free) {
+        Block* prev_of_next = get_prev_block(next);
+        if (prev_of_next == block) {
+            block->size = block->size + next->size + 2 * sizeof(Block);
+            block->is_free = 1;
+            set_end_block(block);
+        }
+    }
 }
 
+void etat_memoire(){
+    uint16_t blocs_libres = 0; // nombre total de blocs libres rencontrés
+    uint16_t blocs_occupes = 0; // nombre total de blocs occupés rencontrés
+    uint16_t max_libre = 0; // taille du plus grand bloc libre (hors métadonnées)
+    uint16_t total_libre = 0; // quantité totale de bytes libres (hors métadonnées)
+    double indice_fragmentation;
 
-int main(void) {
-    init();
+    Block* block = (Block*)MY_HEAP;
+    while ((uint8_t*)block < heap_end())
+    {
+        if (block->is_free){
+            blocs_libres++;
+            total_libre += block->size;
+            if (max_libre < block->size) max_libre = block->size;
+        }
+        else blocs_occupes++;
 
-    int x = leftMemory();
-    printf("memoire initial: %d\n", x);
+        block = (Block*)((uint8_t*)block + block->size + sizeof(block)*2);
+    }
+    
 
-    char *str1 = (char*) my_malloc(20);
-    char *str2 = (char*) my_malloc(20);
-    char *str3 = (char*) my_malloc(50);
-    char *str4 = (char*) my_malloc(100);
-    char *str5 = (char*) my_malloc(1000);
+    if (total_libre == 0) indice_fragmentation = 0.0;  
+    else indice_fragmentation = 1.0 - ((double)max_libre / (double)total_libre);
 
-    x = leftMemory();
-    printf("memoire apres allocs: %d\n", x);
 
-    my_free(str4);
-    x = leftMemory();
-    printf("memoir apres free str4: %d\n", x);
-
-    char *str6 = (char*) my_malloc(2000);
-    x = leftMemory();
-    printf("memoire apres alloc 2000: %d\n", x);
-
-    return 0;
+    printf ("Etat de la mémoire : \n");
+    printf("Nombre de blocs libres : %u\n",blocs_libres);
+    printf("Nombre de blocs occupés : %u\n",blocs_occupes);
+    printf("Taille du plus grand bloc libre : %u\n", max_libre);
+    printf("Mémoire totale libre restante : %u\n",total_libre);
+    printf("Indice de fragmentation de la mémoire : %.3f\n1 = très fragmentée, 0 = très compacte\n",indice_fragmentation) ;
 }

@@ -42,8 +42,8 @@ void *my_malloc(size_t size);
  */
 void my_free(void *pointer);
 
-uint16_t my_find1(size_t size);
-uint16_t my_find2(size_t size);
+uint16_t my_find_asc(size_t size, uint16_t start);
+uint16_t my_find_desc(size_t size, uint16_t start);
 
 /**
  * Les fonctions lire_g et ecrire_g transforment les deux blocs de métadonnées situés à gauche de l'index donné
