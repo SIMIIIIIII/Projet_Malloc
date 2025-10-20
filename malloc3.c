@@ -70,6 +70,14 @@ void my_free(void *pointer){
 
 void *my_malloc(size_t size){
     //TODO
+    // On conserve le padding de 2 mais alloue toujours un minimum de 4!
+    // par exemple, si l'utilisateur demande 1,2,3 ou 4 byte, on lui donne 4. 
+    // S'il demande 5 on lui donne 6, 7->8, 8->8, 9->10, etc.
+    // utiliser my_free(index) sur le bloc vide résiduel à créer.    
+
+    // ATTENTION : my_find ne fait plus gaffe à empêcher les petits morceaux dont on ne sait rien faire!
+    // si my_find dit qu'il faut placer un bloc de 6 byte de données utiles (+4bytes de MD = 10 bytes) dans un bloc de moins de 18 bytes , il faut lui donner les 18 en un seul bloc!
+    // pourquoi 18 bytes ? parce que le bloc vide minimum doit être de 4 byte (+4bytes de MD) pour stocker la liste chaînée de blocs vides. Sinon il ne sera plus jamais retrouvé.
 }
 
 
@@ -82,11 +90,13 @@ uint16_t my_find_asc(size_t size, uint16_t start){
     uint16_t best_size = CODE_ERREUR;
 
     if (lire_g(index)%2!=0) index = nex_free_d(start);
-    start = index;
+    start = index; // mettre à jour le start sinon la condition du while pose problème
 
     do{
         md = lire_g(index);
-        if ((md == size) || ((md>=size)&&(md<=size+((size*15)/100)))) return index;
+        //autorise une marge de 10% pour le perfect fit
+        if ((md == size) || ((md>=size)&&(md<=size+((size*10)/100)))) return index;
+        //si pas de perfect-fit trouvé, on continue de mettre à jour le best-fit
         else if ((md >= size) && (md < best_size)){
             best_fit = index;
             best_size = md;
@@ -97,8 +107,27 @@ uint16_t my_find_asc(size_t size, uint16_t start){
     return CODE_ERREUR;
 }
 uint16_t my_find_desc(size_t size, uint16_t start){
-    //TODO
-    return 0;
+    uint16_t index = start;
+    uint16_t md;
+
+    uint16_t best_fit = CODE_ERREUR;
+    uint16_t best_size = CODE_ERREUR;
+
+    if (lire_g(index)%2!=0) index = nex_free_g(start);
+    start = index; // mettre à jour le start sinon la condition du while pose problème
+
+    do{
+        md = lire_g(index);
+        //autorise une marge de 10% pour le perfect fit
+        if ((md == size) || ((md>=size)&&(md<=size+((size*10)/100)))) return index;
+        else if ((md >= size) && (md < best_size)){
+            best_fit = index;
+            best_size = md;
+        }
+        index = lire_d(index+md);
+
+    } while (index != start); 
+    return CODE_ERREUR;
 }
 
 
