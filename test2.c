@@ -280,11 +280,12 @@ void etat_memoire(){
     printf("Mémoire totale libre restante : %u\n",total_libre);
     printf("Indice de fragmentation de la mémoire : %.3f\n1 = très fragmentée, 0 = très compacte\n",indice_fragmentation) ;
 }
+
 void test_random_steps(){
     init();
 
     //déterminer un range de taille pour les données à allouer
-    uint16_t sizemax = 2000;
+    uint16_t sizemax = 1000;
     uint16_t sizemin = 500;
     uint16_t length = SIZE_HEAP/sizemin;
 
@@ -325,13 +326,14 @@ void test_random_steps(){
     printf("Nombre de nuls : %d\n", nulls);
     printf("\n");
     etat_memoire();
+    printf("\n");
 }
 
 void test_random_time(){
     init();
 
     //déterminer un range de taille pour les données à allouer
-    uint16_t sizemax = 2000;
+    uint16_t sizemax = 1000;
     uint16_t sizemin = 500;
     uint16_t length = SIZE_HEAP/sizemin;
 
