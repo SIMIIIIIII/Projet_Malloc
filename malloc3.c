@@ -69,15 +69,60 @@ void my_free(void *pointer){
 }
 
 void *my_malloc(size_t size){
-    //TODO
-    // On conserve le padding de 2 mais alloue toujours un minimum de 4!
-    // par exemple, si l'utilisateur demande 1,2,3 ou 4 byte, on lui donne 4. 
-    // S'il demande 5 on lui donne 6, 7->8, 8->8, 9->10, etc.
-    // utiliser my_free(index) sur le bloc vide résiduel à créer.    
+    if (size>(SIZE_HEAP-4)){
+        return NULL;
+    }
+    
+    // trouver l'index d'un espace adéquat dans lequel le segment peut se glisser. 
+    // si le segment est plus petit que la valeur MOYEN, on lui cherche une place plutôt à gauche du tas
+    // si le segment est plus grand, on lui cherche une place plutôt à droite
+    // à modifier si ça crée trop de fragmentation
+    uint16_t index;
+    if (size < MOYEN) index = my_find_asc(size,RESERVE);
+    else index = my_find_desc(size,SIZE_HEAP);
 
-    // ATTENTION : my_find ne fait plus gaffe à empêcher les petits morceaux dont on ne sait rien faire!
-    // si my_find dit qu'il faut placer un bloc de 6 byte de données utiles (+4bytes de MD = 10 bytes) dans un bloc de moins de 18 bytes , il faut lui donner les 18 en un seul bloc!
-    // pourquoi 18 bytes ? parce que le bloc vide minimum doit être de 4 byte (+4bytes de MD) pour stocker la liste chaînée de blocs vides. Sinon il ne sera plus jamais retrouvé.
+    if (index == CODE_ERREUR){
+        return NULL;
+    }
+    
+    //padding de 2 et minimum de 4
+    uint16_t taille;
+    if (size<=4) taille=4;
+    else taille = size + (size%2);
+
+    // il va falloir modifier la liste chaînée des blocs vides après avoir malloc
+    uint16_t md = lire_g(index);
+    uint16_t next_g = lire_d(index);
+    uint16_t next_d = lire_g(index+md);
+
+    // ajuster la taille si l'allocation crée un bloc vide trop petit 
+    // un bloc vide doit être constitué d'au moins 8 bytes (4 bytes de données utiles et 4 bytes de MD)
+    if (md<=taille+6) taille = md-2;
+
+    //ajouter 1 pour le flag "occupé"
+    uint16_t new_md = taille+1;
+    
+    //modifier les blocs de MD avant et après les blocs occupés
+    ecrire_g(index,new_md);
+    ecrire_d(index+taille,new_md);
+
+
+    // s'il n'y a pas de bloc vide résiduel : modifier la liste chaînée des blocs vides
+    if (md-2 == taille){
+        ecrire_g(next_g+(lire_g(next_g)),next_d);
+        ecrire_d(next_d,next_g);
+    }
+    // s'il y un bloc résiduel : créer le bloc et modifier la liste chaînée des blocs vides
+    else {
+        uint16_t taille_vide = md - taille - 4;
+        uint16_t index_vide = index+taille+4;
+        ecrire_g(index_vide,taille_vide);
+        my_free(&MY_HEAP[index_vide]); // vérifier qu'on peut faire ça comme ça et que ça remet tout bien à jour, sinon le faire "à la main"
+    }
+    // ATTENTION VERIFIER QUE CA MARCHE!! pas du tout sûre de mon coup!
+
+    return &MY_HEAP[index];
+
 }
 
 
