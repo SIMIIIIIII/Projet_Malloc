@@ -235,6 +235,7 @@ uint16_t next_free_g(uint16_t index){
     if (md%2 == 0) return index; // nécessaire pour faire le tour du tas! (liste chaînée circulaire)
     do {
         find = find-2;
+        // si on arrive au début du tas, on reprend la recherche à la fin
         if (find<=RESERVE) find = SIZE_HEAP;
         md = lire_g(find);
         find = find-(md-(md%2))-2;

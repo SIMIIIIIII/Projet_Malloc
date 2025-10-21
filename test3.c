@@ -188,14 +188,14 @@ void test_next_free_g(){
 
 int main(void) {
     printf("\nFONCTIONS UTILITAIRES :\n");
-    //test_lire_ecrire_g();
-    //test_lire_ecrire_d();
-    //test_lire_ecrire();
+    test_lire_ecrire_g();
+    test_lire_ecrire_d();
+    test_lire_ecrire();
     test_next_free_d();
     test_next_free_g();
     
     printf("\nFONCTIONS CRUCIALES : \n");
-    //test_init();
+    test_init();
 
     //printf("\nTests de performance : \n");
     
