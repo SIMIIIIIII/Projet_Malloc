@@ -125,7 +125,7 @@ void test_next_free_d(){
     // il n'y a pas de bloc libre, la fonction doit retourner un code d'erreur quel que soit l'endroit où elle démarre
     ecrire_d(RESERVE,5);
     ecrire_d(RESERVE+8,5);
-    ecrire_d(RESERVE+16,SIZE_HEAP-RESERVE-15);
+    ecrire_d(RESERVE+16,SIZE_HEAP-RESERVE-15-4);
     assert(next_free_d(RESERVE+2) == CODE_ERREUR);
     assert(next_free_d(RESERVE+10) == CODE_ERREUR);
     assert(next_free_d(RESERVE+18) == CODE_ERREUR);
@@ -173,6 +173,15 @@ void test_next_free_g(){
     assert(next_free_g(RESERVE+10) == SIZE_HEAP-14);
 
     // il n'y a pas de bloc libre, la fonction doit retourner un code d'erreur quel que soit l'endroit où elle démarre
+    ecrire_d(RESERVE,5);
+    ecrire_d(RESERVE+6,5);
+    ecrire_d(RESERVE+8,5);
+    ecrire_d(RESERVE+14,5);
+    ecrire_d(RESERVE+16,SIZE_HEAP-RESERVE-15-4);
+    ecrire_g(SIZE_HEAP,SIZE_HEAP-RESERVE-15-4);
+    assert(next_free_g(RESERVE+2) == CODE_ERREUR);
+    assert(next_free_g(RESERVE+10) == CODE_ERREUR);
+    assert(next_free_g(RESERVE+18) == CODE_ERREUR);
 
     printf("Test next_free_g terminé!\n");
 }
