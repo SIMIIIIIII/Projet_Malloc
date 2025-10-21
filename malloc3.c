@@ -204,42 +204,43 @@ void ecrire_g (uint16_t index, uint16_t valeur){
     MY_HEAP[index-1] = (valeur >> 8) & 0xFF;
 }
 
-uint16_t lire_d(uint16_t index){
-    uint16_t valeur = MY_HEAP[index + 1] | (MY_HEAP[index + 2] << 8);
+uint16_t lire_d(uint16_t index) {
+    uint16_t valeur = MY_HEAP[index] | (MY_HEAP[index+1] << 8);
     return valeur;
 }
 
-void ecrire_d(uint16_t index, uint16_t valeur){
-    MY_HEAP[index + 1] = valeur & 0xFF;
-    MY_HEAP[index + 2] = (valeur >> 8) & 0xFF;
+void ecrire_d(uint16_t index, uint16_t valeur) {
+    MY_HEAP[index]   = valeur & 0xFF;
+    MY_HEAP[index+1] = (valeur >> 8) & 0xFF;
 }
 
 uint16_t next_free_d(uint16_t index){
     uint16_t find = index;
     uint16_t md = lire_g(find);
-    
+    if (md%2 == 0) return index; // nécessaire pour faire le tour du tas! (liste chaînée circulaire)
     do {
-        find = lire_d(find);
-        if (find == CODE_ERREUR || find >= SIZE_HEAP) {
-            return CODE_ERREUR;
-        }
+        find += md+4-(md%2);
+        // si on arrive au bout du tas, on reprend la recherhe au début
+        if (find>SIZE_HEAP-6) find = RESERVE+2; 
         md = lire_g(find);
-    } while (md%2 != 0);
-    
-    return find;
+        if (md%2 == 0) return find;
+    } while (index != find);
+    // si on n'a pas trouvé de bloc libre car la pile est entièrement pleine
+    return CODE_ERREUR; 
 }
 
 uint16_t next_free_g(uint16_t index){
     uint16_t find = index;
-    uint16_t md;
-    
+    uint16_t md = lire_g(find);
+    if (md%2 == 0) return index; // nécessaire pour faire le tour du tas! (liste chaînée circulaire)
     do {
-        find = lire_g(find + md);
-        if (find == CODE_ERREUR || find < RESERVE) {
-            return CODE_ERREUR;
-        }
+        find = find-2;
+        if (find<=RESERVE) find = SIZE_HEAP;
         md = lire_g(find);
-    } while (md%2 != 0);
-    
-    return find;
+        find = find-(md-(md%2))-2;
+        if (md%2==0) return find;
+    } while (find!= index);
+    // si on n'a pas trouvé de bloc libre car la pile est entièrement pleine
+    return CODE_ERREUR;
+
 }

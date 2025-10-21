@@ -57,7 +57,8 @@ void ecrire_d(uint16_t index, uint16_t valeur);
 
 /**
  * Les fonctions next_free trouvent l'indice du début des données utiles du prochain bloc libre 
- * respectivement à gauche ou à droite de l'indice donné
+ * respectivement à gauche ou à droite de l'indice donné.
+ * Si l'index donné est le début d'un bloc libre, la fonction doit simplement retourner l'index
  */
 uint16_t next_free_g(uint16_t index);
 uint16_t next_free_d(uint16_t index);
