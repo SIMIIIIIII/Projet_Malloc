@@ -14,8 +14,15 @@ typedef struct {
     uint8_t is_free; // 1 si libre et 0 si occupé;
 } Block;
 
+typedef struct 
+{
+    int* adrr;
+} NextFree;
 
-/* return le debut de la heap */
+
+Block* CURRENT = NULL; // le block libre courrant;
+
+/* return la premier le debut de la heap */
 uint8_t* heap_start(){
     return MY_HEAP;
 }
@@ -42,6 +49,15 @@ void set_end_block(Block* block) {
 /* regarde si le block se trouve dans l'interval de la heap */
 int in_heap(Block* block) {
     return ((uint8_t*)block >= heap_start()) && ((uint8_t*)block + sizeof(Block) <= heap_end());
+}
+
+/* initialise la heap avec les méta données du début et de la fin */
+void init(){
+    Block* block = (Block*)MY_HEAP;
+    block->size = SIZE_HEAP - (2 * sizeof(Block));
+    block->is_free = 1;
+    set_end_block(block);
+    CURRENT = block;
 }
 
 /* retourne le block précédent qu'il soit libre ou occupé
@@ -93,17 +109,84 @@ Block* get_next_block(Block* block) {
     return next;
 }
 
-void init(){
-    Block* block = (Block*)MY_HEAP;
-    block->size = SIZE_HEAP - (2 * sizeof(Block));
-    block->is_free = 1;
-    set_end_block(block);
+Block* get_next_free(Block* block){
+    if (!in_heap(block)) return NULL;
+
+    if (!block->is_free)
+    {
+        while (!block->is_free && (uint8_t*)block + sizeof(Block) <= heap_end()){
+            block = get_next_block(block);
+            if (block != NULL && block->is_free) return block;
+        }
+        return NULL;
+    }
+    
+    NextFree* next_free = (NextFree*)((uint8_t*)block + sizeof(Block));
+    Block* next = (Block*)(next_free->adrr);
+    if (!in_heap(next)) return NULL;
+
+    //on verifie si la fin du next block se trouve dans le range de la heap
+    Block* nextEnd = end_of_block(next);
+    if ((uint8_t*)nextEnd + sizeof(Block) > heap_end()) return NULL;
+
+    return next;
 }
 
-void my_free(void *pointer) {
-    if (!pointer) return;
+/* alloue la mémoire si possible et retourne NULL sinon */
+void* my_malloc(size_t size){
+    if (size == 0 || size > SIZE_HEAP) return NULL;
 
-    Block* block = ((Block*)pointer) - 1;
+    Block* block = CURRENT;
+    Block* prev_free = NULL;
+
+    while ( block != NULL && (uint8_t*)block + sizeof(Block) <= heap_end()) {
+        if (!in_heap(block)) break;
+
+        if (block->is_free && block->size >= size) {
+            size_t old_size = block->size;
+            
+            //si block restant peux au moins contenir le 2 block de méta données et 1 bytes
+            if (old_size >= size + 2 * sizeof(Block) + 1) {
+                block->size = size;
+                block->is_free = 0;
+                set_end_block(block);
+                
+                //on defini un block libre sur la mémoire restante
+                Block* next = (Block*)((uint8_t*)block + sizeof(Block) + block->size + sizeof(Block));
+                if ((uint8_t*)next + sizeof(Block) <= heap_end()) {
+                    next->is_free = 1;
+                    next->size = old_size - size - 2 * sizeof(Block);
+                    set_end_block(next);
+
+                    NextFree* next_free = (NextFree*)((uint8_t*)next + sizeof(Block));
+                    next_free->adrr = (int*) get_next_free(get_next_block(next));
+
+                    if (prev_free != NULL)
+                    {
+                        NextFree* next_free_prev = (NextFree*)((uint8_t*)prev_free + sizeof(Block));
+                        next_free_prev->adrr = (int*) next;
+                    }
+                    
+
+                }
+            } else {
+                block->is_free = 0;
+                block->size = old_size;
+                set_end_block(block);
+            }
+            if ((uint8_t*)CURRENT == (uint8_t*)block) CURRENT = get_next_free(block);
+            return (void*)(block + 1);
+        }
+        prev_free = block;
+        block = get_next_free(block);
+    }
+    return NULL;
+}
+
+void my_free(void *ptr){
+    if (!ptr) return;
+
+    Block* block = ((Block*)ptr) - 1;
     if (!in_heap(block)) return;
 
     block->is_free = 1;
@@ -131,43 +214,10 @@ void my_free(void *pointer) {
             set_end_block(block);
         }
     }
-}
 
-
-void *my_malloc(size_t size) {
-    if (size == 0 || size > SIZE_HEAP) return NULL;
-
-    Block* block = (Block*)heap_start();
-
-    while (block != NULL) {
-        if (!in_heap(block)) break;
-
-        if (block->is_free && block->size >= size) {
-            size_t old_size = block->size;
-            
-            //si block restant peux au moins contenir le 2 block de méta données et 1 bytes
-            if (old_size >= size + 2 * sizeof(Block) + 1) {
-                block->size = size;
-                block->is_free = 0;
-                set_end_block(block);
-                
-                //on defini un block libre sur la mémoire restante
-                Block* next = (Block*)((uint8_t*)block + sizeof(Block) + block->size + sizeof(Block));
-                if ((uint8_t*)next + sizeof(Block) <= heap_end()) {
-                    next->is_free = 1;
-                    next->size = old_size - size - 2 * sizeof(Block);
-                    set_end_block(next);
-                }
-            } else {
-                block->is_free = 0;
-                block->size = old_size;
-                set_end_block(block);
-            }
-            return (void*)(block + 1);
-        }
-        block = get_next_block(block);
-    }
-    return NULL;
+    NextFree* next_free = (NextFree*)((uint8_t*)block + sizeof(Block));
+    next_free->adrr = (int*) get_next_free(block);
+    
 }
 
 void etat_memoire(){

@@ -14,8 +14,12 @@ typedef struct {
     uint8_t is_free; // 1 si libre et 0 si occupé;
 } Block;
 
+Block* LIST_SMALL_FREE[8] = {NULL};
+size_t SIZE_SMALL_FREE = 0;
+Block* LIST_BIG_FREE[8] = {NULL};
+size_t SIZE_BIG_FREE = 0;
 
-/* return le debut de la heap */
+/* return la premier le debut de la heap */
 uint8_t* heap_start(){
     return MY_HEAP;
 }
@@ -44,9 +48,6 @@ int in_heap(Block* block) {
     return ((uint8_t*)block >= heap_start()) && ((uint8_t*)block + sizeof(Block) <= heap_end());
 }
 
-/* retourne le block précédent qu'il soit libre ou occupé
- * apres il faut adapter pour retourner que le block libre
- */
 Block* get_prev_block(Block* block) {
     if (!in_heap(block)) return NULL;
 
@@ -93,11 +94,53 @@ Block* get_next_block(Block* block) {
     return next;
 }
 
+void remove_free_block(Block** list, size_t* size_list, size_t idx) {
+    for (size_t j = idx; j < *size_list - 1; j++) {
+        list[j] = list[j + 1];
+    }
+    (*size_list)--;
+}
+
+void add_free_block(Block** list, size_t* size_list, Block* block) {
+    if (*size_list < 8) {
+        list[*size_list] = block;
+        (*size_list)++;
+    }
+}
+
+void* allocate(size_t size, Block* block) {
+    if (!in_heap(block)) return NULL;
+
+    size_t old_size = block->size;
+    block->is_free = 0;
+
+    // on split si reste suffisant
+    if (old_size >= size + 2 * sizeof(Block) + 1) {
+        block->size = size;
+        set_end_block(block);
+
+        Block* next = (Block*)((uint8_t*)block + sizeof(Block) + size + sizeof(Block));
+        next->is_free = 1;
+        next->size = old_size - size - 2 * sizeof(Block);
+        set_end_block(next);
+
+        // on ajoute le bloc restant dans la bonne liste
+        if (next->size > 1000) add_free_block(LIST_BIG_FREE, &SIZE_BIG_FREE, next);
+        else add_free_block(LIST_SMALL_FREE, &SIZE_SMALL_FREE, next);
+    } else {
+        block->size = old_size;
+        set_end_block(block);
+    }
+    return (void*)(block + 1);
+}
+
 void init(){
     Block* block = (Block*)MY_HEAP;
     block->size = SIZE_HEAP - (2 * sizeof(Block));
     block->is_free = 1;
     set_end_block(block);
+    LIST_BIG_FREE[0] = block;
+    SIZE_BIG_FREE++;
 }
 
 void my_free(void *pointer) {
@@ -109,63 +152,57 @@ void my_free(void *pointer) {
     block->is_free = 1;
     set_end_block(block);
 
-    //on fusionne avec le block précédent si libre
+    // fusion avec bloc précédent
     Block* prev = get_prev_block(block);
-    if (prev && prev->is_free) {
-        Block* next_of_prev = get_next_block(prev);
-        if (next_of_prev == block) {
-            prev->size = prev->size + block->size + 2 * sizeof(Block);
-            prev->is_free = 1;
-            set_end_block(prev);
-            block = prev;
-        }
+    if (prev && prev->is_free && get_next_block(prev) == block) {
+        prev->size += block->size + 2 * sizeof(Block);
+        prev->is_free = 1;
+        set_end_block(prev);
+        block = prev;
     }
-  
-    //on fusionne avec le block suivant si libre
+
+    // fusion avec bloc suivant
     Block* next = get_next_block(block);
-    if (next && next->is_free) {
-        Block* prev_of_next = get_prev_block(next);
-        if (prev_of_next == block) {
-            block->size = block->size + next->size + 2 * sizeof(Block);
-            block->is_free = 1;
-            set_end_block(block);
-        }
+    if (next && next->is_free && get_prev_block(next) == block) {
+        block->size += next->size + 2 * sizeof(Block);
+        block->is_free = 1;
+        set_end_block(block);
     }
+
+    // réinsérer dans les listes rapides
+    if (block->size > 1000) add_free_block(LIST_BIG_FREE, &SIZE_BIG_FREE, block);
+    else add_free_block(LIST_SMALL_FREE, &SIZE_SMALL_FREE, block);
 }
 
 
 void *my_malloc(size_t size) {
     if (size == 0 || size > SIZE_HEAP) return NULL;
 
-    Block* block = (Block*)heap_start();
-
-    while (block != NULL) {
-        if (!in_heap(block)) break;
-
-        if (block->is_free && block->size >= size) {
-            size_t old_size = block->size;
-            
-            //si block restant peux au moins contenir le 2 block de méta données et 1 bytes
-            if (old_size >= size + 2 * sizeof(Block) + 1) {
-                block->size = size;
-                block->is_free = 0;
-                set_end_block(block);
-                
-                //on defini un block libre sur la mémoire restante
-                Block* next = (Block*)((uint8_t*)block + sizeof(Block) + block->size + sizeof(Block));
-                if ((uint8_t*)next + sizeof(Block) <= heap_end()) {
-                    next->is_free = 1;
-                    next->size = old_size - size - 2 * sizeof(Block);
-                    set_end_block(next);
-                }
-            } else {
-                block->is_free = 0;
-                block->size = old_size;
-                set_end_block(block);
+    // 1. Chercher dans les listes rapides
+    if (size > 1000) {
+        for (size_t i = 0; i < SIZE_BIG_FREE; i++) {
+            if (LIST_BIG_FREE[i] && LIST_BIG_FREE[i]->is_free && LIST_BIG_FREE[i]->size >= size) {
+                Block* block = LIST_BIG_FREE[i];
+                remove_free_block(LIST_BIG_FREE, &SIZE_BIG_FREE, i);
+                return allocate(size, block);
             }
-            return (void*)(block + 1);
         }
-        block = get_next_block(block);
+    } else {
+        for (size_t i = 0; i < SIZE_SMALL_FREE; i++) {
+            if (LIST_SMALL_FREE[i] && LIST_SMALL_FREE[i]->is_free && LIST_SMALL_FREE[i]->size >= size) {
+                Block* block = LIST_SMALL_FREE[i];
+                remove_free_block(LIST_SMALL_FREE, &SIZE_SMALL_FREE, i);
+                return allocate(size, block);
+            }
+        }
+    }
+
+    // 2. Sinon, scan autour du bloc courant
+    Block* right = (Block*)MY_HEAP;
+
+    while (right != NULL) {
+        if (right && right->is_free && right->size >= size) return allocate(size, right);
+        right = get_next_block(right);
     }
     return NULL;
 }
