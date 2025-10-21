@@ -336,17 +336,14 @@ void test_random_steps(){
 void test_random_time(){
     init();
 
-    //déterminer un range de taille pour les données à allouer
     uint16_t sizemax = 1000;
     uint16_t sizemin = 500;
     uint16_t length = SIZE_HEAP/sizemin;
 
-    //compteurs de résultats : 
     int nulls = 0;
     int mallocs = 0;
     int frees = 0;
 
-    // créer un tableau qui contient tous les pointeurs vers les zones allouées
     void* tab[length];
     for (uint16_t i=0; i<length; i++){
         tab[i] = NULL;
@@ -357,19 +354,16 @@ void test_random_time(){
 
     double elapsed = 0.0;
     while (elapsed < 1.0) {
-        uint16_t i = rand() % length; // choisir une case aléatoire
+        uint16_t i = rand() % length;
         if (tab[i]==NULL){
             size_t size = sizemin + rand() % (sizemax - sizemin + 1);
             tab[i] = my_malloc(size);
             if (tab[i]==NULL){
                 nulls++;
-            }
-            
-            else {
+            } else {
                 mallocs++;
             }
-        }
-        else {
+        } else {
             my_free(tab[i]);
             tab[i] = NULL;
             frees++;
@@ -378,12 +372,11 @@ void test_random_time(){
         elapsed = (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
     }
     
-    
     printf("Résultats du test random_time : \n");
     printf("Nombre de mallocs : %d\n", mallocs);
     printf("Nombre de frees : %d\n", frees);
     printf("Nombre de nuls : %d\n", nulls);
-    printf("Nombre de elapse : %d\n", elapsed);
+    printf("Temps écoulé : %.2f secondes\n", elapsed);  // ✅ Utiliser %.2f pour un double
     printf("\n");
     etat_memoire();
     printf("\n");

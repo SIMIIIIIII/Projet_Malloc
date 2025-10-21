@@ -5,168 +5,277 @@
 #define SIZE_HEAP 64000
 uint8_t MY_HEAP[SIZE_HEAP];
 
-
-//j'ai fait beaucoup de if dans des fonctions parce qu'il y avait beaucoup de faute de segmentation
-//donc c'est possible que tu trouves de if inutiles
-
-typedef struct {
-    size_t size;     
+typedef struct BeginBlock{
+    size_t size;
     uint8_t is_free; // 1 si libre et 0 si occupé;
-} Block;
+    struct BeginBlock* next;
+} BeginBlock;
 
+typedef struct{
+    size_t size;
+    uint8_t is_free;
+} EndBlock;
+
+BeginBlock* FIST_FREE;
 
 /* return le debut de la heap */
 uint8_t* heap_start(){
     return MY_HEAP;
 }
 
-/* return la fin de la heap */
+/* return la fin de la heap*/
 uint8_t* heap_end(){
     return MY_HEAP + SIZE_HEAP;
 }
 
-/* return la fin d'un bloc */
-Block* end_of_block(Block* b) {
-    return (Block*)((uint8_t*)b + sizeof(Block) + b->size);
+/* return la fin d'un bloc (adresse du EndBlock) */
+EndBlock* end_of_block(BeginBlock* b) {
+    return (EndBlock*)((uint8_t*)b + sizeof(BeginBlock) + b->size);
 }
 
 /* met les méta données de la fin du bloc */
-void set_end_block(Block* block) {
-    Block* end_block = end_of_block(block);
-    if ((uint8_t*)end_block >= heap_start() && (uint8_t*)end_block + sizeof(Block) <= heap_end()) {
+void set_end_block(BeginBlock* block) {
+    EndBlock* end_block = end_of_block(block);
+    if ((uint8_t*)end_block >= heap_start() && (uint8_t*)end_block + sizeof(EndBlock) <= heap_end()) {
         end_block->size = block->size;
         end_block->is_free = block->is_free;
     }
 }
 
-/* regarde si le block se trouve dans l'interval de la heap */
-int in_heap(Block* block) {
-    return ((uint8_t*)block >= heap_start()) && ((uint8_t*)block + sizeof(Block) <= heap_end());
+/* regarde si le block se trouve dans le range de la heap */
+int in_heap(BeginBlock* block) {
+    if (block == NULL) return 0;
+    uint8_t* bstart = (uint8_t*)block;
+    if (bstart < heap_start()) return 0;
+
+    // vérifier qu'au moins le header tient
+    if (bstart + sizeof(BeginBlock) > heap_end()) return 0;
+    return 1;
 }
 
-/* retourne le block précédent qu'il soit libre ou occupé
- * apres il faut adapter pour retourner que le block libre
- */
-Block* get_prev_block(Block* block) {
+/* retourne le block précédent libre ou occupé */
+BeginBlock* get_prev_block(BeginBlock* block) {
     if (!in_heap(block)) return NULL;
-
-    // Si c'est le debut de la heap alors il n'y a pas des blocks précédents
     if ((uint8_t*)block == heap_start()) return NULL;
-
-    // la fin du block précédent
-    Block* end_Prev = (Block*)((uint8_t*)block - sizeof(Block));
-    if ((uint8_t*)end_Prev < heap_start() || (uint8_t*)end_Prev + sizeof(Block) > heap_end()) {
+    
+    //verifier la fin de la liste précedente
+    EndBlock* end_Prev = (EndBlock*)((uint8_t*)block - sizeof(EndBlock));
+    if ((uint8_t*)end_Prev < heap_start() || (uint8_t*)end_Prev + sizeof(EndBlock) > heap_end()) {
         return NULL;
     }
 
+    //verifier la taille de la liste précedente
     size_t prev_Size = end_Prev->size;
     if (prev_Size == 0 || prev_Size > SIZE_HEAP) return NULL;
 
-    //on check l'adress du debut du block précédent.
-    uint8_t* prev_Addr = (uint8_t*)end_Prev - sizeof(Block) - prev_Size;
+    //verifier l'adress de la liste précédente si elle se trouve dans le range
+    uint8_t* prev_Addr = (uint8_t*)end_Prev - sizeof(BeginBlock) - prev_Size;
     if (prev_Addr < heap_start()) return NULL;
 
-    Block* prev = (Block*)prev_Addr;
+    BeginBlock* prev = (BeginBlock*)prev_Addr;
     if (!in_heap(prev)) return NULL;
-    
-    //un ckeck de sécurité pour etre sur qu'on a vraiment le debut du block
-    Block* check_End = end_of_block(prev);
+
+    EndBlock* check_End = end_of_block(prev);
     if (check_End != end_Prev) return NULL;
 
     return prev;
 }
 
-/* return le block suivant */
-Block* get_next_block(Block* block) {
+/* return le block suivant peut être NULL si dépassement */
+BeginBlock* get_next_block(BeginBlock* block) {
     if (!in_heap(block)) return NULL;
 
-    Block* end = end_of_block(block);
-    if ((uint8_t*)end + sizeof(Block) >= heap_end()) return NULL;
+    EndBlock* end = end_of_block(block);
 
-    Block* next = (Block*)((uint8_t*)end + sizeof(Block));
+    // le BeginBlock suivant commence après la EndBlock
+    uint8_t* next_begin = (uint8_t*)end + sizeof(EndBlock);
+    if (next_begin + sizeof(BeginBlock) > heap_end()) return NULL;
+
+    BeginBlock* next = (BeginBlock*)next_begin;
     if (!in_heap(next)) return NULL;
-    
-    //on verifie si la fin du next block se trouve dans le range de la heap
-    Block* nextEnd = end_of_block(next);
-    if ((uint8_t*)nextEnd + sizeof(Block) > heap_end()) return NULL;
+
+    // verifier que le end du next est toujours dans la heap
+    EndBlock* nextEnd = end_of_block(next);
+    if ((uint8_t*)nextEnd + sizeof(EndBlock) > heap_end()) return NULL;
 
     return next;
 }
 
+/* trouve le précédent libre retourne NULL si aucun */
+BeginBlock* get_prev_free(BeginBlock* block){
+    if (!in_heap(block)) return NULL;
+
+    // si block est au début, il n'y a pas de prev
+    if ((uint8_t*)block == heap_start()) return NULL;
+
+    BeginBlock* prev = block;
+
+    while (1) {
+        EndBlock* end_prev = (EndBlock*)((uint8_t*)prev - sizeof(EndBlock));
+        if ((uint8_t*)end_prev < heap_start() || (uint8_t*)end_prev + sizeof(EndBlock) > heap_end()) {
+            return NULL;
+        }
+        // adresse du début du block précédent
+        uint8_t* prev_addr = (uint8_t*)end_prev - sizeof(BeginBlock) - end_prev->size;
+        if (prev_addr < heap_start()) return NULL;
+        prev = (BeginBlock*)prev_addr;
+        if (!in_heap(prev)) return NULL;
+        EndBlock* chk = end_of_block(prev);
+        if (chk != end_prev) return NULL;
+        if (prev->is_free) return prev;
+        
+        if ((uint8_t*)prev == heap_start()) return NULL;
+    }
+}
+
+/* trouve le suivant libre retourne NULL si aucun */
+BeginBlock* get_next_free(BeginBlock* block){
+    if (!in_heap(block)) return NULL;
+
+    BeginBlock* next = block;
+    while (1) {
+        // calculer adresse du suivant logique
+        uint8_t* next_addr = (uint8_t*)next + sizeof(BeginBlock) + next->size + sizeof(EndBlock);
+        if (next_addr + sizeof(BeginBlock) > heap_end()) return NULL;
+        next = (BeginBlock*)next_addr;
+        if (!in_heap(next)) return NULL;
+        
+        EndBlock* nextEnd = end_of_block(next);
+        if ((uint8_t*)nextEnd + sizeof(EndBlock) > heap_end()) return NULL;
+        if (next->is_free) return next;
+    }
+}
+
 void init(){
-    Block* block = (Block*)MY_HEAP;
-    block->size = SIZE_HEAP - (2 * sizeof(Block));
+    BeginBlock* block = (BeginBlock*)MY_HEAP;
+    block->size = SIZE_HEAP - sizeof(BeginBlock) - sizeof(EndBlock);
     block->is_free = 1;
+    block->next = NULL;
     set_end_block(block);
+    FIST_FREE = block;
 }
 
 void my_free(void *pointer) {
     if (!pointer) return;
-
-    Block* block = ((Block*)pointer) - 1;
+    
+    BeginBlock* block = ((BeginBlock*)pointer) - 1;
     if (!in_heap(block)) return;
-
+    
     block->is_free = 1;
+    block->next = NULL;
     set_end_block(block);
-
-    //on fusionne avec le block précédent si libre
-    Block* prev = get_prev_block(block);
+    
+    // Fusion avec le bloc précédent si libre
+    BeginBlock* prev = get_prev_block(block);
     if (prev && prev->is_free) {
-        Block* next_of_prev = get_next_block(prev);
-        if (next_of_prev == block) {
-            prev->size = prev->size + block->size + 2 * sizeof(Block);
-            prev->is_free = 1;
-            set_end_block(prev);
-            block = prev;
-        }
+        prev->size = prev->size + block->size + sizeof(BeginBlock) + sizeof(EndBlock);
+        prev->is_free = 1;
+        set_end_block(prev);
+        block = prev;
     }
-  
-    //on fusionne avec le block suivant si libre
-    Block* next = get_next_block(block);
+    
+    // Fusion avec le bloc suivant si libre
+    BeginBlock* next = get_next_block(block);
     if (next && next->is_free) {
-        Block* prev_of_next = get_prev_block(next);
-        if (prev_of_next == block) {
-            block->size = block->size + next->size + 2 * sizeof(Block);
-            block->is_free = 1;
-            set_end_block(block);
+        block->size = block->size + next->size + sizeof(BeginBlock) + sizeof(EndBlock);
+        block->is_free = 1;
+        set_end_block(block);
+    }
+    
+    // Reconstruire toute la liste chaînée des blocs libres
+    FIST_FREE = NULL;
+    BeginBlock* last_free = NULL;
+    BeginBlock* current = (BeginBlock*)MY_HEAP;
+    
+    while ((uint8_t*)current + sizeof(BeginBlock) <= heap_end()) {
+        if (!in_heap(current)) break;
+        
+        if (current->is_free) {
+            current->next = NULL;
+            
+            if (FIST_FREE == NULL) {
+                FIST_FREE = current;
+            } else if (last_free != NULL) {
+                last_free->next = current;
+            }
+            last_free = current;
         }
+        
+        // Passer au bloc suivant
+        uint8_t* next_addr = (uint8_t*)current + sizeof(BeginBlock) + current->size + sizeof(EndBlock);
+        if (next_addr >= heap_end()) break;
+        current = (BeginBlock*)next_addr;
     }
 }
 
-
 void *my_malloc(size_t size) {
-    if (size == 0 || size > SIZE_HEAP) return NULL;
+    if (size == 0) return NULL;
+    if (size > SIZE_HEAP - sizeof(BeginBlock) - sizeof(EndBlock)) return NULL;
+    if (FIST_FREE == NULL) return NULL;
 
-    Block* block = (Block*)heap_start();
+    if (!FIST_FREE->is_free) FIST_FREE = get_next_free((BeginBlock*)MY_HEAP);
+    if (FIST_FREE == NULL) return NULL;
 
+    BeginBlock* block = FIST_FREE;
+    BeginBlock* prev_free = NULL;
+    BeginBlock* best_fit = NULL;
+    BeginBlock* prev_fit = NULL;
+
+    // Recherche du meilleur bloc
     while (block != NULL) {
         if (!in_heap(block)) break;
 
         if (block->is_free && block->size >= size) {
             size_t old_size = block->size;
-            
-            //si block restant peux au moins contenir le 2 block de méta données et 1 bytes
-            if (old_size >= size + 2 * sizeof(Block) + 1) {
-                block->size = size;
-                block->is_free = 0;
-                set_end_block(block);
-                
-                //on defini un block libre sur la mémoire restante
-                Block* next = (Block*)((uint8_t*)block + sizeof(Block) + block->size + sizeof(Block));
-                if ((uint8_t*)next + sizeof(Block) <= heap_end()) {
-                    next->is_free = 1;
-                    next->size = old_size - size - 2 * sizeof(Block);
-                    set_end_block(next);
+
+            // Vérifier si on peut diviser le bloc
+            if (old_size >= size + sizeof(BeginBlock) + sizeof(EndBlock) + 1) {
+                // Chercher le meilleur bloc
+                if (best_fit == NULL || block->size < best_fit->size) {
+                    best_fit = block;
+                    prev_fit = prev_free;
                 }
             } else {
+                // Allocation exacte, pas de division possible
                 block->is_free = 0;
-                block->size = old_size;
                 set_end_block(block);
+
+                if (prev_free != NULL) prev_free->next = block->next;
+                else FIST_FREE = block->next;
+                
+                return (void*)(block + 1);
             }
-            return (void*)(block + 1);
         }
-        block = get_next_block(block);
+        prev_free = block;
+        block = block->next;
     }
+
+    // Si on a trouvé un best_fit, on le divise
+    if (best_fit != NULL) {
+        size_t old_size = best_fit->size;
+        best_fit->size = size;
+        best_fit->is_free = 0;
+        set_end_block(best_fit);
+        
+        // Créer un nouveau bloc libre après best_fit
+        BeginBlock* next = (BeginBlock*)((uint8_t*)best_fit + sizeof(BeginBlock) + size + sizeof(EndBlock));
+        
+        if ((uint8_t*)next + sizeof(BeginBlock) + sizeof(EndBlock) <= heap_end()) {
+            next->is_free = 1;
+            next->size = old_size - size - sizeof(BeginBlock) - sizeof(EndBlock);
+            next->next = best_fit->next;
+            set_end_block(next);
+            
+            if (prev_fit != NULL) prev_fit->next = next;
+            else FIST_FREE = next;
+        } else {
+            if (prev_fit != NULL) prev_fit->next = best_fit->next;
+            else FIST_FREE = best_fit->next;
+        }
+        
+        return (void*)(best_fit + 1);
+    }
+    
     return NULL;
 }
 
@@ -177,7 +286,7 @@ void etat_memoire(){
     uint16_t total_libre = 0; // quantité totale de bytes libres (hors métadonnées)
     double indice_fragmentation;
 
-    Block* block = (Block*)MY_HEAP;
+    BeginBlock* block = (BeginBlock*)MY_HEAP;
     while ((uint8_t*)block < heap_end())
     {
         if (block->is_free){
@@ -187,7 +296,7 @@ void etat_memoire(){
         }
         else blocs_occupes++;
 
-        block = (Block*)((uint8_t*)block + block->size + sizeof(block)*2);
+        block = (BeginBlock*)((uint8_t*)block + block->size + sizeof(BeginBlock) + sizeof(EndBlock));
     }
     
 
