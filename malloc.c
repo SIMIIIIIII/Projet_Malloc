@@ -16,11 +16,10 @@ typedef struct{
     uint8_t is_free;
 } EndBlock;
 
-BeginBlock* FIST_FREE;
 
 /* return le debut de la heap */
 uint8_t* heap_start(){
-    return MY_HEAP;
+    return MY_HEAP + sizeof(BeginBlock*);
 }
 
 /* return la fin de la heap*/
@@ -146,13 +145,24 @@ BeginBlock* get_next_free(BeginBlock* block){
     }
 }
 
+// Pour lire l'adresse stockée :
+BeginBlock* get_first_free() {
+    return *((BeginBlock**)MY_HEAP);
+}
+
 void init(){
-    BeginBlock* block = (BeginBlock*)MY_HEAP;
-    block->size = SIZE_HEAP - sizeof(BeginBlock) - sizeof(EndBlock);
+    // Réserver de l'espace au début pour stocker l'adresse du premier block libre
+    BeginBlock** first_free_ptr = (BeginBlock**)MY_HEAP;
+    
+    // Le premier bloc commence après cet espace réservé
+    BeginBlock* block = (BeginBlock*)heap_start();
+    block->size = SIZE_HEAP - sizeof(BeginBlock) - sizeof(EndBlock) - sizeof(BeginBlock*);
     block->is_free = 1;
     block->next = NULL;
     set_end_block(block);
-    FIST_FREE = block;
+    
+    // Stocker l'adresse du premier bloc libre dans l'espace reservé
+    *first_free_ptr = block;
 }
 
 void my_free(void *pointer) {
@@ -183,9 +193,11 @@ void my_free(void *pointer) {
     }
     
     // Reconstruire toute la liste chaînée des blocs libres
-    FIST_FREE = NULL;
+    BeginBlock** first_free_ptr = (BeginBlock**)MY_HEAP;
+    *first_free_ptr = NULL;
+    
     BeginBlock* last_free = NULL;
-    BeginBlock* current = (BeginBlock*)MY_HEAP;
+    BeginBlock* current = (BeginBlock*)heap_start();
     
     while ((uint8_t*)current + sizeof(BeginBlock) <= heap_end()) {
         if (!in_heap(current)) break;
@@ -193,8 +205,8 @@ void my_free(void *pointer) {
         if (current->is_free) {
             current->next = NULL;
             
-            if (FIST_FREE == NULL) {
-                FIST_FREE = current;
+            if (*first_free_ptr == NULL) {
+                *first_free_ptr = current;
             } else if (last_free != NULL) {
                 last_free->next = current;
             }
@@ -211,12 +223,19 @@ void my_free(void *pointer) {
 void *my_malloc(size_t size) {
     if (size == 0) return NULL;
     if (size > SIZE_HEAP - sizeof(BeginBlock) - sizeof(EndBlock)) return NULL;
-    if (FIST_FREE == NULL) return NULL;
 
-    if (!FIST_FREE->is_free) FIST_FREE = get_next_free((BeginBlock*)MY_HEAP);
-    if (FIST_FREE == NULL) return NULL;
+    BeginBlock* first_free = get_first_free();
+    if (first_free == NULL) return NULL;
 
-    BeginBlock* block = FIST_FREE;
+    BeginBlock** first_free_ptr = (BeginBlock**)MY_HEAP;
+
+    if (!first_free->is_free) {
+        *first_free_ptr = get_next_free((BeginBlock*)heap_start());
+        first_free = get_first_free();
+    }
+    if (first_free == NULL) return NULL;
+
+    BeginBlock* block = first_free;
     BeginBlock* prev_free = NULL;
     BeginBlock* best_fit = NULL;
     BeginBlock* prev_fit = NULL;
@@ -241,7 +260,7 @@ void *my_malloc(size_t size) {
                 set_end_block(block);
 
                 if (prev_free != NULL) prev_free->next = block->next;
-                else FIST_FREE = block->next;
+                else *first_free_ptr = block->next;
                 
                 return (void*)(block + 1);
             }
@@ -267,10 +286,10 @@ void *my_malloc(size_t size) {
             set_end_block(next);
             
             if (prev_fit != NULL) prev_fit->next = next;
-            else FIST_FREE = next;
+            else *first_free_ptr = next;
         } else {
             if (prev_fit != NULL) prev_fit->next = best_fit->next;
-            else FIST_FREE = best_fit->next;
+            else *first_free_ptr = best_fit->next;
         }
         
         return (void*)(best_fit + 1);
@@ -286,7 +305,7 @@ void etat_memoire(){
     uint16_t total_libre = 0; // quantité totale de bytes libres (hors métadonnées)
     double indice_fragmentation;
 
-    BeginBlock* block = (BeginBlock*)MY_HEAP;
+    BeginBlock* block = (BeginBlock*)heap_start();
     while ((uint8_t*)block < heap_end())
     {
         if (block->is_free){
