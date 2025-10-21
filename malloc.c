@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdint.h>
-#include <string.h>
 
 #define SIZE_HEAP 64000
 uint8_t MY_HEAP[SIZE_HEAP];
@@ -296,37 +295,4 @@ void *my_malloc(size_t size) {
     }
     
     return NULL;
-}
-
-void etat_memoire(){
-    uint16_t blocs_libres = 0; // nombre total de blocs libres rencontrés
-    uint16_t blocs_occupes = 0; // nombre total de blocs occupés rencontrés
-    uint16_t max_libre = 0; // taille du plus grand bloc libre (hors métadonnées)
-    uint16_t total_libre = 0; // quantité totale de bytes libres (hors métadonnées)
-    double indice_fragmentation;
-
-    BeginBlock* block = (BeginBlock*)heap_start();
-    while ((uint8_t*)block < heap_end())
-    {
-        if (block->is_free){
-            blocs_libres++;
-            total_libre += block->size;
-            if (max_libre < block->size) max_libre = block->size;
-        }
-        else blocs_occupes++;
-
-        block = (BeginBlock*)((uint8_t*)block + block->size + sizeof(BeginBlock) + sizeof(EndBlock));
-    }
-    
-
-    if (total_libre == 0) indice_fragmentation = 0.0;  
-    else indice_fragmentation = 1.0 - ((double)max_libre / (double)total_libre);
-
-
-    printf ("Etat de la mémoire : \n");
-    printf("Nombre de blocs libres : %u\n",blocs_libres);
-    printf("Nombre de blocs occupés : %u\n",blocs_occupes);
-    printf("Taille du plus grand bloc libre : %u\n", max_libre);
-    printf("Mémoire totale libre restante : %u\n",total_libre);
-    printf("Indice de fragmentation de la mémoire : %.3f\n1 = très fragmentée, 0 = très compacte\n",indice_fragmentation) ;
 }

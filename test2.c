@@ -329,7 +329,7 @@ void test_random_steps(){
     printf("Nombre de frees : %d\n", frees);
     printf("Nombre de nuls : %d\n", nulls);
     printf("\n");
-    etat_memoire();
+    //etat_memoire();
     printf("\n");
 }
 
@@ -378,7 +378,7 @@ void test_random_time(){
     printf("Nombre de nuls : %d\n", nulls);
     printf("Temps écoulé : %.2f secondes\n", elapsed);  // ✅ Utiliser %.2f pour un double
     printf("\n");
-    etat_memoire();
+    //etat_memoire();
     printf("\n");
 }
 
