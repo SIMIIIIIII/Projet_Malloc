@@ -123,7 +123,6 @@ void my_free(void *pointer) {
     Block* next = get_next_block(block);
     if (next && next->is_free) {
         block->size = block->size + next->size + (sizeof(Block)*2);
-        block->is_free = 1;
         set_end_block(block);
     }
 }
@@ -154,7 +153,6 @@ void *my_malloc(size_t size) {
                 return (void*)(block + 1);
             }
         }
-        
         block = get_next_block(block);
     }
 

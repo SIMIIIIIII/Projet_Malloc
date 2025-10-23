@@ -191,32 +191,14 @@ void my_free(void *pointer) {
         set_end_block(block);
     }
     
+    block->next = get_next_free(block);
+    prev = get_prev_free(block);
+    if (prev != NULL) prev->next = block;
+    
     // Reconstruire toute la liste chaînée des blocs libres
     BeginBlock** first_free_ptr = (BeginBlock**)MY_HEAP;
-    *first_free_ptr = NULL;
-    
-    BeginBlock* last_free = NULL;
-    BeginBlock* current = (BeginBlock*)heap_start();
-    
-    while ((uint8_t*)current + sizeof(BeginBlock) <= heap_end()) {
-        if (!in_heap(current)) break;
-        
-        if (current->is_free) {
-            current->next = NULL;
-            
-            if (*first_free_ptr == NULL) {
-                *first_free_ptr = current;
-            } else if (last_free != NULL) {
-                last_free->next = current;
-            }
-            last_free = current;
-        }
-        
-        // Passer au bloc suivant
-        uint8_t* next_addr = (uint8_t*)current + sizeof(BeginBlock) + current->size + sizeof(EndBlock);
-        if (next_addr >= heap_end()) break;
-        current = (BeginBlock*)next_addr;
-    }
+    BeginBlock* first_free = get_first_free();
+    if (first_free == NULL || (uint8_t*)block < (uint8_t*)first_free) *first_free_ptr = block;
 }
 
 void *my_malloc(size_t size) {
@@ -267,6 +249,7 @@ void *my_malloc(size_t size) {
                     if (prev_free != NULL) prev_free->next = block->next;
                     else *first_free_ptr = block->next;
                 }
+                block->next = NULL;
                 return (void*)(block + 1);
             }
             // Allocation exacte, pas de division possible
@@ -274,7 +257,7 @@ void *my_malloc(size_t size) {
             set_end_block(block);
             if (prev_free != NULL) prev_free->next = block->next;
             else *first_free_ptr = block->next;
-            
+            block->next = NULL;
             return (void*)(block + 1);
         }
         prev_free = block;
